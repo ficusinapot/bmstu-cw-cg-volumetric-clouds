@@ -1,5 +1,7 @@
-use crate::domain::facade::Command;
+use crate::facade::Command;
+use log::debug;
 
+#[derive(Debug, Default)]
 pub struct ObjectCommand;
 
 impl ObjectCommand {
@@ -10,6 +12,7 @@ impl ObjectCommand {
 
 impl Command for ObjectCommand {
     fn exec(self) {
-        println!("Hello world");
+        debug!("Executing ObjectCommand");
+        println!("Hello world!!!");
     }
 }
