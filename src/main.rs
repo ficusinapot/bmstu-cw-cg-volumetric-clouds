@@ -1,25 +1,16 @@
-use domain::facade::{Facade, ObjectCommand};
-use log::debug;
+mod config;
 
-#[allow(clippy::pedantic)]
+use domain::facade::{CameraCommand, CameraCommandKind, Facade, SceneCommand};
+use std::error::Error;
+use crate::config::init_logger;
 
-pub(crate) fn init_logger() -> Result<(), log::SetLoggerError> {
-    if std::env::var_os("RUST_LOG").is_none() {
-        env_logger::builder()
-            .default_format()
-            .filter(None, log::LevelFilter::Info)
-            .filter(None, log::LevelFilter::Debug)
-            .try_init()?;
-    } else {
-        env_logger::try_init()?;
-    }
-    debug!("init_logger: Ok");
-    Ok(())
-}
-
-fn main() -> Result<(), Box<log::SetLoggerError>> {
+fn main() -> Result<(), Box<dyn Error>> {
     init_logger()?;
-    let oc = ObjectCommand::new();
-    Facade::exec(oc);
+    let mut facade = Facade::default();
+    
+    let cc = SceneCommand::new();
+    facade.exec(cc);
+    let cc = SceneCommand::new();
+    facade.exec(cc);
     Ok(())
 }

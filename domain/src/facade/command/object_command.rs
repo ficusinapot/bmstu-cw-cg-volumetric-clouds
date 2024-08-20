@@ -1,18 +1,20 @@
 use crate::facade::Command;
+use crate::managers::object_manager::SceneManager;
 use log::debug;
 
 #[derive(Debug, Default)]
-pub struct ObjectCommand;
+pub struct SceneCommand;
 
-impl ObjectCommand {
+impl SceneCommand {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl Command for ObjectCommand {
-    fn exec(self) {
-        debug!("Executing ObjectCommand");
-        println!("Hello world!!!");
+impl Command for SceneCommand {
+    type CommandManager = SceneManager;
+    fn exec(&mut self, manager: &mut SceneManager) {
+        debug!("Executing {:?}: {:?}", self, manager);
+        manager.add_counter();
     }
 }
