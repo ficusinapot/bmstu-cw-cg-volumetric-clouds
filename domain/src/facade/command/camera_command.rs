@@ -1,6 +1,7 @@
 use crate::facade::Command;
 use crate::managers::camera_manager::CameraManager;
 use log::debug;
+use crate::managers::ManagerSolution;
 
 #[derive(Debug)]
 pub enum CameraCommandKind {
@@ -20,8 +21,7 @@ impl CameraCommand {
 }
 
 impl Command for CameraCommand {
-    type CommandManager = CameraManager;
-    fn exec(&mut self, manager: &mut CameraManager) {
+    fn exec(&mut self, manager: &mut ManagerSolution) {
         debug!("Executing {:?}", manager);
         println!("Hello world!!!");
     }

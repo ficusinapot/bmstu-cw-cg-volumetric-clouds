@@ -1,8 +1,15 @@
 use crate::managers::Manager;
+use crate::object::camera::FPSCamera;
 
-#[derive(Copy, Clone, Default, Debug)]
-pub struct CameraManager {}
+#[derive(Default, Debug)]
+pub struct CameraManager {
+    camera: FPSCamera
+}
 
-impl CameraManager {}
+impl CameraManager {
+    pub fn get_camera(&self) -> &FPSCamera {
+        &self.camera
+    }
+}
 
 impl Manager for CameraManager {}

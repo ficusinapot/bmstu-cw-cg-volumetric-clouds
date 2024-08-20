@@ -1,12 +1,13 @@
 mod camera_command;
-mod object_command;
+mod scene_command;
+mod draw_command;
 
-use crate::managers::Manager;
+use crate::managers::{ManagerSolution};
 pub use camera_command::{CameraCommand, CameraCommandKind};
-pub use object_command::SceneCommand;
+pub use scene_command::{SceneCommand, SceneCommandKind};
+pub use draw_command::{DrawCommand, DrawCommandKind};
 
 pub trait Command {
-    type CommandManager: Manager;
 
-    fn exec(&mut self, manager: &mut Self::CommandManager);
+    fn exec(&mut self, manager: &mut ManagerSolution);
 }

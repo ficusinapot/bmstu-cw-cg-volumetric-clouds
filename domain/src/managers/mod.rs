@@ -1,34 +1,34 @@
 use crate::managers::camera_manager::CameraManager;
-use crate::managers::object_manager::SceneManager;
 use crate::managers::scene_manager::SceneManager;
+use crate::managers::draw_manager::DrawManager;
 
 pub mod camera_manager;
-pub mod object_manager;
 pub mod scene_manager;
+pub mod draw_manager;
 
 pub trait Manager {}
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ManagerSolution {
-    scene_manager: SceneManager,
-    camera_manager: CameraManager,
-    object_manager: SceneManager,
+    pub scene_manager: SceneManager,
+    pub camera_manager: CameraManager,
+    pub draw_manager: DrawManager,
 }
 
-impl<'a> From<&'a mut ManagerSolution> for &'a mut SceneManager {
-    fn from(value: &'a mut ManagerSolution) -> &'a mut SceneManager {
-        &mut value.scene_manager
+impl ManagerSolution {
+    #[inline]
+    pub fn get_scene_manager(&self) -> &SceneManager {
+        &self.scene_manager
+    }
+
+    #[inline]
+    pub fn get_camera_manager(&self) -> &CameraManager {
+        &self.camera_manager
+    }
+
+    #[inline]
+    pub fn get_object_manager(&self) -> &DrawManager {
+        &self.draw_manager
     }
 }
 
-impl<'a> From<&'a mut ManagerSolution> for &'a mut SceneManager {
-    fn from(value: &'a mut ManagerSolution) -> &'a mut SceneManager {
-        &mut value.object_manager
-    }
-}
-
-impl<'a> From<&'a mut ManagerSolution> for &'a mut CameraManager {
-    fn from(value: &'a mut ManagerSolution) -> &'a mut CameraManager {
-        &mut value.camera_manager
-    }
-}
