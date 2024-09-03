@@ -16,7 +16,7 @@ impl Scene {
         unimplemented!()
     }
 
-    pub fn get_object(&self, index: usize)  {
+    pub fn get_object(&self, index: usize) {
         unimplemented!()
     }
 }

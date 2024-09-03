@@ -1,6 +1,6 @@
 pub mod camera;
 
-use crate::object::camera::{Camera, FPSCamera};
+use crate::object::camera::FPSCamera;
 use crate::scene::scene_composite::SceneObjects;
 use crate::visitor::{Visitable, Visitor};
 
@@ -10,7 +10,7 @@ pub enum Component {
     Composite(SceneObjects),
 }
 
-impl From<FPSCamera> for  Component {
+impl From<FPSCamera> for Component {
     fn from(value: FPSCamera) -> Self {
         Component::Camera(value)
     }
@@ -19,12 +19,8 @@ impl From<FPSCamera> for  Component {
 impl Visitable for Component {
     fn accept(&self, visitor: &impl Visitor) {
         match self {
-            Component::Camera(camera) => {
-                camera.accept(visitor)
-            }
-            Component::Composite(composite) => {
-                composite.accept(visitor)
-            }
+            Component::Camera(camera) => camera.accept(visitor),
+            Component::Composite(composite) => composite.accept(visitor),
         }
     }
 }

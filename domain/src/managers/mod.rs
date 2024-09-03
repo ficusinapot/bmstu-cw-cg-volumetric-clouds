@@ -1,10 +1,10 @@
 use crate::managers::camera_manager::CameraManager;
-use crate::managers::scene_manager::SceneManager;
 use crate::managers::draw_manager::DrawManager;
+use crate::managers::scene_manager::SceneManager;
 
 pub mod camera_manager;
-pub mod scene_manager;
 pub mod draw_manager;
+pub mod scene_manager;
 
 pub trait Manager {}
 
@@ -31,4 +31,3 @@ impl ManagerSolution {
         &self.draw_manager
     }
 }
-

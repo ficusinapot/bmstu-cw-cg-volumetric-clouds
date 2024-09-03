@@ -3,7 +3,7 @@ use crate::object::camera::FPSCamera;
 
 #[derive(Default, Debug)]
 pub struct CameraManager {
-    camera: FPSCamera
+    camera: FPSCamera,
 }
 
 impl CameraManager {

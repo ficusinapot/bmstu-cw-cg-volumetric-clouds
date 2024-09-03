@@ -1,7 +1,7 @@
-use std::collections::BTreeMap as Map;
-use std::ops::{Deref, DerefMut};
 use crate::object::Component;
 use crate::visitor::{Visitable, Visitor};
+use std::collections::BTreeMap as Map;
+use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Default)]
 pub struct SceneObjects {
@@ -12,13 +12,14 @@ pub struct SceneObjects {
 impl SceneObjects {
     pub fn add_object(&mut self, object: impl Into<Component>) {
         self.objects.insert(self.index, object.into());
+        self.index += 1;
     }
 
     pub fn remove_object(&mut self, index: usize) {
         unimplemented!()
     }
 
-    pub fn get_object(&self, index: usize)  {
+    pub fn get_object(&self, index: usize) {
         unimplemented!()
     }
 }

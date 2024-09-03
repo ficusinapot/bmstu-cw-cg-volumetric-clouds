@@ -13,6 +13,6 @@ pub trait Visitor: Sized {
             i.accept(self)
         }
     }
-    
+
     fn visit_camera(&self, _camera: &FPSCamera) {}
 }

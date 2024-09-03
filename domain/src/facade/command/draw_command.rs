@@ -1,11 +1,17 @@
 use crate::facade::Command;
-use crate::managers::camera_manager::CameraManager;
-use log::debug;
 use crate::managers::ManagerSolution;
+use log::debug;
 
 #[derive(Debug)]
 pub enum DrawCommandKind {
-    Draw
+    Draw,
+}
+
+impl Command for DrawCommandKind {
+    fn exec(self, manager: &mut ManagerSolution) {
+        let command: DrawCommand = self.into();
+        command.exec(manager);
+    }
 }
 
 #[derive(Debug)]
@@ -20,7 +26,7 @@ impl DrawCommand {
 }
 
 impl Command for DrawCommand {
-    fn exec(&mut self, manager: &mut ManagerSolution) {
+    fn exec(self, manager: &mut ManagerSolution) {
         debug!("Executing {:?}", self);
         match self.kind {
             DrawCommandKind::Draw => {
@@ -29,6 +35,11 @@ impl Command for DrawCommand {
                 manager.draw_manager.draw_scene(camera, scene);
             }
         }
+    }
+}
 
+impl From<DrawCommandKind> for DrawCommand {
+    fn from(value: DrawCommandKind) -> Self {
+        Self::new(value)
     }
 }

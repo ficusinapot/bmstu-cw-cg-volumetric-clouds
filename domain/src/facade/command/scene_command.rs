@@ -1,40 +1,51 @@
-use crate::facade::{Command};
-use crate::managers::scene_manager::SceneManager;
-use log::debug;
+use crate::facade::Command;
 use crate::managers::ManagerSolution;
-use crate::object::camera::FPSCamera;
+use log::debug;
 
 #[derive(Debug)]
 pub enum SceneCommandKind {
     AddObject,
     GetObject,
+    RemoveObject,
+}
+
+impl Command for SceneCommandKind {
+    fn exec(self, manager: &mut ManagerSolution) {
+        let command: SceneCommand = self.into();
+        command.exec(manager);
+    }
 }
 
 #[derive(Debug)]
 pub struct SceneCommand {
-    kind: SceneCommandKind
+    kind: SceneCommandKind,
 }
 
 impl SceneCommand {
     pub fn new(kind: SceneCommandKind) -> Self {
-        Self {
-            kind
-        }
+        Self { kind }
     }
 }
 
 impl Command for SceneCommand {
-    fn exec(&mut self, manager: &mut ManagerSolution) {
-        debug!("Executing {:?}", self); 
+    fn exec(self, manager: &mut ManagerSolution) {
+        debug!("Executing {:?}", self);
         match self.kind {
             SceneCommandKind::AddObject => {
                 debug!("add object");
-                let object = FPSCamera::new();
-                manager.scene_manager.add_object(object);
             }
             SceneCommandKind::GetObject => {
                 debug!("get object");
             }
+            SceneCommandKind::RemoveObject => {
+                debug!("remove object");
+            }
         }
+    }
+}
+
+impl From<SceneCommandKind> for SceneCommand {
+    fn from(value: SceneCommandKind) -> Self {
+        Self::new(value)
     }
 }

@@ -7,8 +7,7 @@ pub struct Facade {
 }
 
 impl Facade {
-    pub fn exec<C: Command>(&mut self, mut command: C)
-    {
+    pub fn exec<C: Command>(&mut self, command: C) {
         command.exec(&mut self.manager);
     }
 }

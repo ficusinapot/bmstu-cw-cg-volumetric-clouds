@@ -1,9 +1,9 @@
-use log::debug;
 use crate::managers::Manager;
 use crate::object::camera::FPSCamera;
 use crate::scene::scene::Scene;
 use crate::visitor::draw_visitor::DrawVisitor;
 use crate::visitor::Visitable;
+use log::debug;
 
 #[derive(Copy, Clone, Default, Debug)]
 pub struct DrawManager {}
