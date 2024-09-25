@@ -4,3 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+egui = { workspace = true , features = ["serde", "mint"] }
+mint = {version = "0.5.9"}
+eframe = {workspace = true}
+glam = {workspace = true, features = ["serde", "mint"] }
+log = {workspace = true}
+
