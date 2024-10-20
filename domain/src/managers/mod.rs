@@ -8,7 +8,7 @@ pub mod scene_manager;
 
 pub trait Manager {}
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct ManagerSolution {
     pub scene_manager: SceneManager,
     pub camera_manager: CameraManager,
@@ -27,7 +27,22 @@ impl ManagerSolution {
     }
 
     #[inline]
-    pub fn get_object_manager(&self) -> &DrawManager {
+    pub fn get_draw_manager(&self) -> &DrawManager {
         &self.draw_manager
+    }
+
+    #[inline]
+    pub fn get_mut_scene_manager(&mut self) -> &mut SceneManager {
+        &mut self.scene_manager
+    }
+
+    #[inline]
+    pub fn get_mut_camera_manager(&mut self) -> &mut CameraManager {
+        &mut self.camera_manager
+    }
+
+    #[inline]
+    pub fn get_mut_draw_manager(&mut self) -> &mut DrawManager {
+        &mut self.draw_manager
     }
 }

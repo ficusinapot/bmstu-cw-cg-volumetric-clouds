@@ -2,7 +2,7 @@ use crate::object::Component;
 use crate::scene::scene_composite::SceneObjects;
 use crate::visitor::{Visitable, Visitor};
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Scene {
     pub objects: SceneObjects,
 }
@@ -12,11 +12,11 @@ impl Scene {
         self.objects.add_object(object)
     }
 
-    pub fn remove_object(&mut self, index: usize) {
+    pub fn remove_object(&mut self, _index: usize) {
         unimplemented!()
     }
 
-    pub fn get_object(&self, index: usize) {
+    pub fn get_object(&self, _index: usize) {
         unimplemented!()
     }
 }

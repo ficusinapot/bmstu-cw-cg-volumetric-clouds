@@ -3,7 +3,7 @@ use crate::visitor::{Visitable, Visitor};
 use std::collections::BTreeMap as Map;
 use std::ops::{Deref, DerefMut};
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct SceneObjects {
     pub objects: Map<usize, Component>,
     index: usize,
@@ -15,11 +15,11 @@ impl SceneObjects {
         self.index += 1;
     }
 
-    pub fn remove_object(&mut self, index: usize) {
+    pub fn remove_object(&mut self, _index: usize) {
         unimplemented!()
     }
 
-    pub fn get_object(&self, index: usize) {
+    pub fn get_object(&self, _index: usize) {
         unimplemented!()
     }
 }

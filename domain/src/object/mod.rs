@@ -1,18 +1,35 @@
 pub mod camera;
+pub mod cloud;
+pub mod objects;
 
-use crate::object::camera::FPSCamera;
+use crate::object::camera::Camera;
+use cloud::Cloud;
+use crate::object::objects::Grid;
 use crate::scene::scene_composite::SceneObjects;
 use crate::visitor::{Visitable, Visitor};
 
-#[derive(Debug)]
 pub enum Component {
-    Camera(FPSCamera),
+    Camera(Camera),
     Composite(SceneObjects),
+    Cloud(Cloud),
+    Grid(Grid),
 }
 
-impl From<FPSCamera> for Component {
-    fn from(value: FPSCamera) -> Self {
+impl From<Camera> for Component {
+    fn from(value: Camera) -> Self {
         Component::Camera(value)
+    }
+}
+
+impl From<Cloud> for Component {
+    fn from(value: Cloud) -> Self {
+        Component::Cloud(value)
+    }
+}
+
+impl From<Grid> for Component {
+    fn from(value: Grid) -> Self {
+        Component::Grid(value)
     }
 }
 
@@ -21,6 +38,8 @@ impl Visitable for Component {
         match self {
             Component::Camera(camera) => camera.accept(visitor),
             Component::Composite(composite) => composite.accept(visitor),
+            Component::Cloud(cloud) => cloud.accept(visitor),
+            Component::Grid(grid) => grid.accept(visitor),
         }
     }
 }

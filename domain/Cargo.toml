@@ -5,6 +5,8 @@ edition = "2021"
 
 [dependencies]
 cgmath = "0.18.0"
-env_logger = {workspace = true}
-log = {workspace = true}
-glam = {workspace = true, features = ["serde", "mint"] }
+env_logger = { workspace = true }
+log = { workspace = true }
+glam = { workspace = true, features = ["serde", "mint"] }
+egui = { workspace = true, features = ["serde", "mint"] }
+mint = { workspace = true }

@@ -1,41 +1,32 @@
 use crate::facade::Command;
 use crate::managers::ManagerSolution;
-use log::debug;
+use crate::object::camera::Camera;
 
 #[derive(Debug)]
-pub enum CameraCommandKind {
-    Rotate,
-    Zoom,
-    Translate,
-}
-
-impl Command for CameraCommandKind {
-    fn exec(self, manager: &mut ManagerSolution) {
-        let command: CameraCommand = self.into();
-        command.exec(manager);
-    }
-}
-
-#[derive(Debug)]
-pub struct CameraCommand {
-    kind: CameraCommandKind,
-}
-
-impl CameraCommand {
-    pub fn new(kind: CameraCommandKind) -> Self {
-        Self { kind }
-    }
+pub enum CameraCommand {
+    Pan(f32, f32),
+    Zoom(f32),
+    Pivot(f32, f32),
+    SetCamera(Camera),
 }
 
 impl Command for CameraCommand {
     fn exec(self, manager: &mut ManagerSolution) {
-        debug!("Executing {:?}", manager);
-        println!("Hello world!!!");
-    }
-}
-
-impl From<CameraCommandKind> for CameraCommand {
-    fn from(value: CameraCommandKind) -> Self {
-        Self::new(value)
+        let cm = manager.get_mut_camera_manager();
+        let camera = cm.get_mut_camera();
+        match self {
+            CameraCommand::Pan(x, y) => {
+               camera.pan(x, y);
+            },
+            CameraCommand::Pivot(x, y) => {
+                camera.pivot(x, y);
+            },
+            CameraCommand::Zoom(x) => {
+                camera.zoom(x);
+            },
+            CameraCommand::SetCamera(c) => {
+                cm.set_camera(c);
+            }
+        }
     }
 }

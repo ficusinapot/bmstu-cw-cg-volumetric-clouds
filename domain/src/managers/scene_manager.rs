@@ -2,7 +2,7 @@ use crate::managers::Manager;
 use crate::object::Component;
 use crate::scene::scene::Scene;
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct SceneManager {
     scene: Scene,
 }

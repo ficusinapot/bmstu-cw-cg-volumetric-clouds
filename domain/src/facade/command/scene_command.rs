@@ -1,51 +1,27 @@
 use crate::facade::Command;
 use crate::managers::ManagerSolution;
 use log::debug;
+use crate::object::Component;
 
-#[derive(Debug)]
-pub enum SceneCommandKind {
-    AddObject,
-    GetObject,
-    RemoveObject,
-}
-
-impl Command for SceneCommandKind {
-    fn exec(self, manager: &mut ManagerSolution) {
-        let command: SceneCommand = self.into();
-        command.exec(manager);
-    }
-}
-
-#[derive(Debug)]
-pub struct SceneCommand {
-    kind: SceneCommandKind,
-}
-
-impl SceneCommand {
-    pub fn new(kind: SceneCommandKind) -> Self {
-        Self { kind }
-    }
+pub enum SceneCommand {
+    AddObject(Component),
+    GetObject(Component),
+    RemoveObject(Component),
 }
 
 impl Command for SceneCommand {
     fn exec(self, manager: &mut ManagerSolution) {
-        debug!("Executing {:?}", self);
-        match self.kind {
-            SceneCommandKind::AddObject => {
-                debug!("add object");
+        match self {
+            SceneCommand::AddObject(component) => {
+                let sm = manager.get_mut_scene_manager();
+                sm.add_object(component);
             }
-            SceneCommandKind::GetObject => {
+            SceneCommand::GetObject(_component) => {
                 debug!("get object");
             }
-            SceneCommandKind::RemoveObject => {
+            SceneCommand::RemoveObject(_component) => {
                 debug!("remove object");
             }
         }
-    }
-}
-
-impl From<SceneCommandKind> for SceneCommand {
-    fn from(value: SceneCommandKind) -> Self {
-        Self::new(value)
     }
 }

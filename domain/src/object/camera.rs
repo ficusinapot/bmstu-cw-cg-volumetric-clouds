@@ -1,86 +1,178 @@
+use std::f32::consts::FRAC_PI_2;
+
+use glam::{Mat4, Vec3, Vec4, Vec4Swizzles};
 use crate::visitor::{Visitable, Visitor};
-use cgmath::{perspective, InnerSpace, Matrix4, Point3, Rad, Vector3, Zero};
 
-#[rustfmt::skip]
-pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
-    1.0, 0.0, 0.0, 0.0,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 0.5, 0.5,
-    0.0, 0.0, 0.0, 1.0,
-);
-
-const SAFE_FRAC_PI_2: f32 = std::f32::consts::FRAC_PI_2 - 0.0001;
-
-#[derive(Debug)]
-pub struct FPSCamera {
-    pub position: Point3<f32>,
-    yaw: Rad<f32>,
-    pitch: Rad<f32>,
+/// Camera controller and parameters
+#[derive(Default, Copy, Clone, Debug)]
+pub struct Camera {
+    pub proj: Perspective,
+    pub view: ArcBall,
+    pub control: ArcBallController,
 }
 
-impl Default for FPSCamera {
-    fn default() -> Self {
-        Self {
-            position: Point3::new(0.0, 0.0, 0.0),
-            yaw: Rad::zero(),
-            pitch: Rad::zero(),
+impl Visitable for Camera {
+    fn accept(&self, _visitor: &impl Visitor) {
+        todo!()
+    }
+}
+
+impl Camera {
+    /// Return the projection matrix of this camera
+    pub fn projection(&self, width: f32, height: f32) -> Mat4 {
+        self.proj.matrix(width, height)
+    }
+
+    /// Return the view matrix of this camera
+    pub fn view(&self) -> Mat4 {
+        self.view.matrix()
+    }
+
+    /// Pivot the camera by the given mouse pointer delta
+    pub fn pivot(&mut self, delta_x: f32, delta_y: f32) {
+        self.control.pivot(&mut self.view, delta_x, delta_y)
+    }
+
+    /// Pan the camera by the given mouse pointer delta
+    pub fn pan(&mut self, delta_x: f32, delta_y: f32) {
+        self.control.pan(&mut self.view, delta_x, delta_y)
+    }
+
+    /// Zoom the camera by the given mouse scroll delta
+    pub fn zoom(&mut self, delta: f32) {
+        self.control.zoom(&mut self.view, delta)
+    }
+
+    /// Handle interaction
+    pub fn handle_response(&mut self, response: &egui::Response, ui: &egui::Ui) {
+        // Camera movement
+        if response.dragged_by(egui::PointerButton::Primary) {
+            if ui.input(|i| i.raw.modifiers.shift_only()) {
+                self.pan(response.drag_delta().x, response.drag_delta().y);
+            } else {
+                self.pivot(response.drag_delta().x, response.drag_delta().y);
+            }
+        }
+
+        if response.dragged_by(egui::PointerButton::Secondary) {
+            self.pan(response.drag_delta().x, response.drag_delta().y);
+        }
+
+        if response.hovered() {
+            self.zoom(ui.input(|i| -i.raw_scroll_delta.y));
         }
     }
 }
 
-impl FPSCamera {
-    pub fn new(
-        position: impl Into<Point3<f32>>,
-        yaw: impl Into<Rad<f32>>,
-        pitch: impl Into<Rad<f32>>,
-    ) -> Self {
-        Self {
-            position: position.into(),
-            yaw: yaw.into(),
-            pitch: pitch.into(),
-        }
+/// Perspective projection parameters
+#[derive(Copy, Clone, Debug)]
+pub struct Perspective {
+    pub fov: f32,
+    pub clip_near: f32,
+    pub clip_far: f32,
+}
+
+/// Arcball camera parameters
+#[derive(Copy, Clone, Debug)]
+pub struct ArcBall {
+    pub pivot: Vec3,
+    pub distance: f32,
+    pub yaw: f32,
+    pub pitch: f32,
+}
+
+/// Arcball camera controller parameters
+#[derive(Copy, Clone, Debug)]
+pub struct ArcBallController {
+    pub pan_sensitivity: f32,
+    pub swivel_sensitivity: f32,
+    pub zoom_sensitivity: f32,
+    pub closest_zoom: f32,
+}
+
+impl Perspective {
+    pub fn matrix(&self, width: f32, height: f32) -> Mat4 {
+        Mat4::perspective_rh(self.fov, width / height, self.clip_near, self.clip_far)
     }
+}
 
-    pub fn calc_matrix(&self) -> Matrix4<f32> {
-        let (sin_pitch, cos_pitch) = self.pitch.0.sin_cos();
-        let (sin_yaw, cos_yaw) = self.yaw.0.sin_cos();
-
-        Matrix4::look_to_rh(
-            self.position,
-            Vector3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw).normalize(),
-            Vector3::unit_y(),
+impl ArcBall {
+    pub fn matrix(&self) -> Mat4 {
+        Mat4::look_at_rh(
+            self.pivot + self.eye(),
+            self.pivot,
+            Vec3::new(0.0, 1.0, 0.0),
         )
     }
+
+    pub fn eye(&self) -> Vec3 {
+        Vec3::new(
+            self.yaw.cos() * self.pitch.cos().abs(),
+            self.pitch.sin(),
+            self.yaw.sin() * self.pitch.cos().abs(),
+        ) * self.distance
+    }
 }
 
-pub struct Projection {
-    aspect: f32,
-    fovy: Rad<f32>,
-    znear: f32,
-    zfar: f32,
+impl ArcBallController {
+    pub fn pivot(&mut self, arcball: &mut ArcBall, delta_x: f32, delta_y: f32) {
+        arcball.yaw += delta_x * self.swivel_sensitivity;
+        arcball.pitch += delta_y * self.swivel_sensitivity;
+
+        arcball.pitch = arcball.pitch.clamp(-FRAC_PI_2, FRAC_PI_2);
+    }
+
+    pub fn pan(&mut self, arcball: &mut ArcBall, delta_x: f32, delta_y: f32) {
+        let delta = Vec4::new(
+            (-delta_x as f32) * arcball.distance,
+            (delta_y as f32) * arcball.distance,
+            0.0,
+            0.0,
+        ) * self.pan_sensitivity;
+
+        // TODO: This is dumb, just use the cross product 4head
+        let inv = arcball.matrix().inverse();
+        let delta = (inv * delta).xyz();
+        arcball.pivot += delta;
+    }
+
+    pub fn zoom(&mut self, arcball: &mut ArcBall, delta: f32) {
+        arcball.distance += delta * self.zoom_sensitivity.powf(2.) * arcball.distance;
+        arcball.distance = arcball.distance.max(self.closest_zoom);
+    }
 }
 
-impl Projection {
-    pub fn new<F: Into<Rad<f32>>>(width: u32, height: u32, fovy: F, znear: f32, zfar: f32) -> Self {
+// Arbitrary
+impl Default for ArcBall {
+    fn default() -> Self {
         Self {
-            aspect: width as f32 / height as f32,
-            fovy: fovy.into(),
-            znear,
-            zfar,
+            pivot: Vec3::ZERO,
+            pitch: 0.3,
+            yaw: -1.92,
+            distance: 3.,
         }
     }
+}
 
-    pub fn resize(&mut self, width: u32, height: u32) {
-        self.aspect = width as f32 / height as f32;
-    }
-
-    pub fn calc_matrix(&self) -> Matrix4<f32> {
-        OPENGL_TO_WGPU_MATRIX * perspective(self.fovy, self.aspect, self.znear, self.zfar)
+// Arbitrary
+impl Default for Perspective {
+    fn default() -> Self {
+        Self {
+            fov: 60.0f32.to_radians(),
+            clip_near: 0.01,
+            clip_far: 2_000.0,
+        }
     }
 }
 
-impl Visitable for FPSCamera {
-    fn accept(&self, visitor: &impl Visitor) {
-        visitor.visit_camera(self);
+// Arbitrary
+impl Default for ArcBallController {
+    fn default() -> Self {
+        Self {
+            pan_sensitivity: 0.0015,
+            swivel_sensitivity: 0.005,
+            zoom_sensitivity: 0.04,
+            closest_zoom: 0.01,
+        }
     }
 }
