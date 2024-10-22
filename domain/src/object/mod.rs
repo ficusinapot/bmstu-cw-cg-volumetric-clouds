@@ -1,12 +1,11 @@
 pub mod camera;
-pub mod cloud;
 pub mod objects;
 
 use crate::object::camera::Camera;
-use cloud::Cloud;
 use crate::object::objects::Grid;
 use crate::scene::scene_composite::SceneObjects;
 use crate::visitor::{Visitable, Visitor};
+use objects::cloud::Cloud;
 
 pub enum Component {
     Camera(Camera),

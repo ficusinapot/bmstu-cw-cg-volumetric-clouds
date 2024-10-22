@@ -1,4 +1,3 @@
-
 // glam's types are part of our interface
 // TODO: use mint? But then we'd have to convert every time ...
 pub use glam;
@@ -52,10 +51,8 @@ impl Transform {
         todo!()
     }
 
-    
     /// Returns a Transform which has the given transformation prepended
     pub fn prepend(&mut self, tf: Transform) {
         self.mat = tf.mat * self.mat;
     }
-   
 }

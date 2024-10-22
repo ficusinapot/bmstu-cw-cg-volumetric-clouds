@@ -7,10 +7,10 @@ pub struct CameraManager {
 }
 
 impl CameraManager {
-    pub fn set_camera(&mut self, camera: Camera) { 
+    pub fn set_camera(&mut self, camera: Camera) {
         self.camera = camera;
     }
-    
+
     pub fn get_camera(&self) -> &Camera {
         &self.camera
     }

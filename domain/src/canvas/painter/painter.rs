@@ -1,15 +1,25 @@
 //! Extension to `egui` for 3D drawings
-use egui::{Color32, Stroke};
+
+use egui::epaint::{Vertex, WHITE_UV};
+use egui::{Color32, Pos2, Shape, Stroke, TextureId};
+use std::ops::Deref;
 // glam's types are part of our interface
 // TODO: use mint? But then we'd have to convert every time ...
+use crate::math::transform::Transform;
 pub use glam;
 pub use glam::Vec3;
-use crate::math::transform::Transform;
 
 #[derive(Clone)]
 pub struct Painter3D {
     painter_2d: egui::Painter,
     resp_rect: egui::Rect,
+}
+
+impl Deref for Painter3D {
+    type Target = egui::Painter;
+    fn deref(&self) -> &Self::Target {
+        &self.painter_2d
+    }
 }
 
 impl Painter3D {
@@ -20,7 +30,7 @@ impl Painter3D {
         }
     }
 
-    pub fn rect(&self) -> egui::Rect {
+    pub fn resp_rect(&self) -> egui::Rect {
         self.resp_rect
     }
 
@@ -31,7 +41,7 @@ impl Painter3D {
         text: impl ToString,
         font_id: egui::FontId,
         text_color: Color32,
-        mvp: Transform
+        mvp: Transform,
     ) -> Option<egui::Rect> {
         self.transform(pos, mvp)
             .map(|pos| self.painter_2d.text(pos, anchor, text, font_id, text_color))
@@ -57,9 +67,106 @@ impl Painter3D {
 
 impl Painter3D {
     pub fn line(&self, a: Vec3, b: Vec3, stroke: Stroke, mvp: Transform) {
-        let Some(a) = self.transform(a, mvp) else { return };
-        let Some(b) = self.transform(b, mvp) else { return };
+        let Some(a) = self.transform(a, mvp) else {
+            return;
+        };
+        let Some(b) = self.transform(b, mvp) else {
+            return;
+        };
         self.painter_2d.line_segment([a, b], stroke);
+    }
+
+    pub fn dashed_line(
+        &self,
+        a: Vec3,
+        b: Vec3,
+        dash_length: f32,
+        gap_length: f32,
+        stroke: Stroke,
+        mvp: Transform,
+    ) {
+        let Some(a) = self.transform(a, mvp) else {
+            return;
+        };
+        let Some(b) = self.transform(b, mvp) else {
+            return;
+        };
+        self.painter_2d
+            .add(Shape::dashed_line(&[a, b], stroke, dash_length, gap_length));
+    }
+
+    pub fn bound_rect(
+        &self,
+        a: impl Into<Vec3>,
+        b: impl Into<Vec3>,
+        texture_id: TextureId,
+        mvp: Transform,
+    ) {
+        let a = a.into();
+        let b = b.into();
+
+        let c = Vec3::new(a.x, b.y, a.z);
+        let d = Vec3::new(b.x, a.y, b.z);
+
+        println!("{:?} {:?} {:?} {:?}", a, b, c, d);
+
+        let Some(a) = self.transform(a, mvp) else {
+            return;
+        };
+        let Some(b) = self.transform(b, mvp) else {
+            return;
+        };
+        let Some(c) = self.transform(c, mvp) else {
+            return;
+        };
+        let Some(d) = self.transform(d, mvp) else {
+            return;
+        };
+
+        let mut mesh = egui::Mesh::with_texture(texture_id);
+        mesh.vertices.push(Vertex {
+            pos: a,
+            uv: WHITE_UV,
+            color: Color32::RED,
+        });
+        mesh.vertices.push(Vertex {
+            pos: b,
+            uv: WHITE_UV,
+            color: Color32::GREEN,
+        });
+        mesh.vertices.push(Vertex {
+            pos: c,
+            uv: WHITE_UV,
+            color: Color32::BLUE,
+        });
+        mesh.vertices.push(Vertex {
+            pos: d,
+            uv: WHITE_UV,
+            color: Color32::ORANGE,
+        });
+
+        mesh.add_triangle(0, 2, 3);
+        mesh.add_triangle(1, 2, 3);
+        self.painter_2d.add(mesh);
+    }
+
+    pub fn triangle(&self, a: Vec3, b: Vec3, c: Vec3, color32: Color32, mvp: Transform) {
+        let Some(a) = self.transform(a, mvp) else {
+            return;
+        };
+        let Some(b) = self.transform(b, mvp) else {
+            return;
+        };
+        let Some(c) = self.transform(c, mvp) else {
+            return;
+        };
+
+        let mut mesh = egui::Mesh::default();
+        mesh.colored_vertex(a, color32);
+        mesh.colored_vertex(b, color32);
+        mesh.colored_vertex(c, color32);
+        mesh.add_triangle(0, 1, 2);
+        self.painter_2d.add(mesh);
     }
 
     // fn circle_filled(&self, center: Vec3, radius: f32, fill_color: impl Into<Color32>) {
@@ -68,7 +175,7 @@ impl Painter3D {
     //     };
     //     self.painter_2d.circle_filled(center, radius, fill_color);
     // }
-    // 
+    //
     // fn circle(&self, center: Vec3, radius: f32, stroke: impl Into<Stroke>) {
     //     let Some(center) = self.transform(center) else {
     //         return;

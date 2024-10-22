@@ -10,10 +10,8 @@ pub trait Canvas {
     // fn circle(&self, center: Vec3, radius: f32, stroke: impl Into<Stroke>);
 }
 
-
 // impl Canvas for Painter3D {
 //     fn render(&self) {
 //         self.show(self)
 //     }
 // }
-

@@ -1,6 +1,6 @@
+use crate::canvas::painter::Painter3D;
 use crate::facade::Command;
 use crate::managers::ManagerSolution;
-use crate::canvas::painter::Painter3D;
 
 pub enum DrawCommand {
     SetPainter(Painter3D),
@@ -8,6 +8,7 @@ pub enum DrawCommand {
 }
 
 impl Command for DrawCommand {
+    type ReturnType = ();
     fn exec(self, manager: &mut ManagerSolution) {
         match self {
             Self::SetPainter(painter) => {
@@ -23,4 +24,3 @@ impl Command for DrawCommand {
         }
     }
 }
-

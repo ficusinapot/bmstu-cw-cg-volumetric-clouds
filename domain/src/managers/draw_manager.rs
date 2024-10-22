@@ -1,10 +1,10 @@
-use egui::Stroke;
+use crate::canvas::painter::Painter3D;
 use crate::managers::Manager;
 use crate::object::camera::Camera;
 use crate::scene::scene::Scene;
 use crate::visitor::draw_visitor::DrawVisitor;
 use crate::visitor::Visitable;
-use crate::canvas::painter::Painter3D;
+use egui::Stroke;
 
 #[derive(Clone, Default)]
 pub struct DrawManager {

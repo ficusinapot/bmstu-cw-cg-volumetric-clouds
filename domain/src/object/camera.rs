@@ -1,7 +1,7 @@
 use std::f32::consts::FRAC_PI_2;
 
-use glam::{Mat4, Vec3, Vec4, Vec4Swizzles};
 use crate::visitor::{Visitable, Visitor};
+use glam::{Mat4, Vec3, Vec4, Vec4Swizzles};
 
 /// Camera controller and parameters
 #[derive(Default, Copy, Clone, Debug)]
@@ -18,6 +18,10 @@ impl Visitable for Camera {
 }
 
 impl Camera {
+    pub fn get_pivot(&self) -> Vec3 {
+        self.view.pivot()
+    }
+
     /// Return the projection matrix of this camera
     pub fn projection(&self, width: f32, height: f32) -> Mat4 {
         self.proj.matrix(width, height)
@@ -41,26 +45,6 @@ impl Camera {
     /// Zoom the camera by the given mouse scroll delta
     pub fn zoom(&mut self, delta: f32) {
         self.control.zoom(&mut self.view, delta)
-    }
-
-    /// Handle interaction
-    pub fn handle_response(&mut self, response: &egui::Response, ui: &egui::Ui) {
-        // Camera movement
-        if response.dragged_by(egui::PointerButton::Primary) {
-            if ui.input(|i| i.raw.modifiers.shift_only()) {
-                self.pan(response.drag_delta().x, response.drag_delta().y);
-            } else {
-                self.pivot(response.drag_delta().x, response.drag_delta().y);
-            }
-        }
-
-        if response.dragged_by(egui::PointerButton::Secondary) {
-            self.pan(response.drag_delta().x, response.drag_delta().y);
-        }
-
-        if response.hovered() {
-            self.zoom(ui.input(|i| -i.raw_scroll_delta.y));
-        }
     }
 }
 
@@ -97,6 +81,10 @@ impl Perspective {
 }
 
 impl ArcBall {
+    pub fn pivot(&self) -> Vec3 {
+        self.pivot
+    }
+
     pub fn matrix(&self) -> Mat4 {
         Mat4::look_at_rh(
             self.pivot + self.eye(),
@@ -148,7 +136,7 @@ impl Default for ArcBall {
         Self {
             pivot: Vec3::ZERO,
             pitch: 0.3,
-            yaw: -1.92,
+            yaw: 1.92,
             distance: 3.,
         }
     }

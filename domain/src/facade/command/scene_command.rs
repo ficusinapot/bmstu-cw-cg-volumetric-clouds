@@ -1,7 +1,7 @@
 use crate::facade::Command;
 use crate::managers::ManagerSolution;
-use log::debug;
 use crate::object::Component;
+use log::debug;
 
 pub enum SceneCommand {
     AddObject(Component),
@@ -10,6 +10,7 @@ pub enum SceneCommand {
 }
 
 impl Command for SceneCommand {
+    type ReturnType = ();
     fn exec(self, manager: &mut ManagerSolution) {
         match self {
             SceneCommand::AddObject(component) => {
