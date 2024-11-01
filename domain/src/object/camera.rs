@@ -1,7 +1,6 @@
-use std::f32::consts::FRAC_PI_2;
-
 use crate::visitor::{Visitable, Visitor};
 use glam::{Mat4, Vec3, Vec4, Vec4Swizzles};
+use std::f32::consts::FRAC_PI_2;
 
 /// Camera controller and parameters
 #[derive(Default, Copy, Clone, Debug)]
@@ -18,8 +17,59 @@ impl Visitable for Camera {
 }
 
 impl Camera {
+    pub fn get_pixel_screen_position(&self, world_pos: Vec3, width: usize, height: usize) -> Option<(usize, usize)> {
+        let view_matrix = self.view();
+        let proj_matrix = self.projection(width as f32, height as f32);
+        
+        let camera_pos = view_matrix.transform_point3(world_pos);
+        let clip_space_pos = proj_matrix * camera_pos.extend(1.0);
+
+        if clip_space_pos.w == 0.0 {
+            return None; 
+        }
+
+        let ndc_pos = clip_space_pos.xyz() / clip_space_pos.w;
+        
+        let pixel_x = ((ndc_pos.x + 1.0) * 0.5 * width as f32) as isize;
+        let pixel_y = ((1.0 - ndc_pos.y) * 0.5 * height as f32) as isize;
+
+        if pixel_x >= 0 && pixel_x < width as isize && pixel_y >= 0 && pixel_y < height as isize {
+            Some((pixel_x as usize, pixel_y as usize))
+        } else {
+            None
+        }
+    }
+    
+    pub fn get_pixel_world_position(&self, i: usize, j: usize, width: usize, height: usize) -> Vec3 {
+        let aspect_ratio = width as f32 / height as f32;
+        let fov_adjustment = (self.proj.fov / 2.0).tan();
+
+        let pixel_ndc_x = (j as f32) / width as f32;
+        let pixel_ndc_y = (i as f32) / height as f32;
+
+        let pixel_screen_x = 2.0 * pixel_ndc_x - 1.0;
+        let pixel_screen_y = 1.0 - 2.0 * pixel_ndc_y;
+
+        let pixel_camera_x = pixel_screen_x * aspect_ratio * fov_adjustment;
+        let pixel_camera_y = pixel_screen_y * fov_adjustment;
+
+        let pixel_camera_position = Vec3::new(pixel_camera_x, pixel_camera_y, -1.0);
+        let view_matrix = self.view();
+        let pixel_world_position = view_matrix.inverse().transform_point3(pixel_camera_position);
+
+        pixel_world_position
+    }
+
+    pub fn get_position(&self) -> Vec3 {
+        self.view.eye()
+    }
+
     pub fn get_pivot(&self) -> Vec3 {
-        self.view.pivot()
+        self.view.pivot
+    }
+
+    pub fn get_direction(&self) -> Vec3 {
+        (self.view.pivot - self.view.eye()).normalize()
     }
 
     /// Return the projection matrix of this camera
@@ -86,18 +136,19 @@ impl ArcBall {
     }
 
     pub fn matrix(&self) -> Mat4 {
+        let eye = self.eye();
         Mat4::look_at_rh(
-            self.pivot + self.eye(),
-            self.pivot,
+            eye,
+            self.pivot - eye,
             Vec3::new(0.0, 1.0, 0.0),
         )
     }
 
     pub fn eye(&self) -> Vec3 {
         Vec3::new(
-            self.yaw.cos() * self.pitch.cos().abs(),
+            self.yaw.cos() * self.pitch.cos(),
             self.pitch.sin(),
-            self.yaw.sin() * self.pitch.cos().abs(),
+            self.yaw.sin() * self.pitch.cos(),
         ) * self.distance
     }
 }
@@ -134,10 +185,10 @@ impl ArcBallController {
 impl Default for ArcBall {
     fn default() -> Self {
         Self {
-            pivot: Vec3::ZERO,
-            pitch: 0.3,
-            yaw: 1.92,
-            distance: 3.,
+            pivot: Vec3::new(0.0, 0.5, 0.0),
+            pitch: 0.6,
+            yaw: 0.0,
+            distance: 5.,
         }
     }
 }
@@ -146,9 +197,9 @@ impl Default for ArcBall {
 impl Default for Perspective {
     fn default() -> Self {
         Self {
-            fov: 60.0f32.to_radians(),
-            clip_near: 0.01,
-            clip_far: 2_000.0,
+            fov: 45.0f32.to_radians(),
+            clip_near: 0.1,
+            clip_far: 100.0,
         }
     }
 }
@@ -162,5 +213,18 @@ impl Default for ArcBallController {
             zoom_sensitivity: 0.04,
             closest_zoom: 0.01,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_camera_direction() {
+        let camera = Camera::default();
+        let dir = camera.get_direction();
+        assert_eq!(dir, Vec3::new(-0.99503726, 0.099503726, 0.0));
+        assert_eq!(dir.length(), 1.0);
     }
 }

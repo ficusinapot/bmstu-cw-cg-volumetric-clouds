@@ -8,8 +8,16 @@ pub struct SceneManager {
 }
 
 impl SceneManager {
-    pub fn add_object(&mut self, object: impl Into<Component>) {
-        self.scene.add_object(object);
+    pub fn add_object(&mut self, name: &'static str, object: impl Into<Component>) {
+        self.scene.add_object(name, object);
+    }
+
+    pub fn get_object(&mut self, name: &'static str) {
+        self.scene.get_object(name);
+    }
+
+    pub fn get_mut_object(&mut self, name: &'static str) -> Option<&mut Component> {
+        self.scene.get_mut_object(name)
     }
 
     pub fn get_scene(&self) -> &Scene {

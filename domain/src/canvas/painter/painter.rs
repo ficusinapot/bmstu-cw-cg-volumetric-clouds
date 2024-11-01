@@ -1,7 +1,7 @@
 //! Extension to `egui` for 3D drawings
 
-use egui::epaint::{Vertex, WHITE_UV};
-use egui::{Color32, Pos2, Shape, Stroke, TextureId};
+use egui::epaint::Vertex;
+use egui::{Color32, Shape, Stroke, TextureId};
 use std::ops::Deref;
 // glam's types are part of our interface
 // TODO: use mint? But then we'd have to convert every time ...
@@ -13,6 +13,7 @@ pub use glam::Vec3;
 pub struct Painter3D {
     painter_2d: egui::Painter,
     resp_rect: egui::Rect,
+    to_screen: egui::emath::RectTransform,
 }
 
 impl Deref for Painter3D {
@@ -27,6 +28,10 @@ impl Painter3D {
         Self {
             painter_2d,
             resp_rect,
+            to_screen: egui::emath::RectTransform::from_to(
+                egui::Rect::from_min_size(egui::Pos2::ZERO, resp_rect.size()),
+                resp_rect.translate(egui::Pos2::new(-15.0, -15.0).to_vec2()),
+            ),
         }
     }
 
@@ -73,6 +78,7 @@ impl Painter3D {
         let Some(b) = self.transform(b, mvp) else {
             return;
         };
+        let (a, b) = (self.to_screen.transform_pos(a), self.to_screen.transform_pos(b));
         self.painter_2d.line_segment([a, b], stroke);
     }
 
@@ -91,6 +97,7 @@ impl Painter3D {
         let Some(b) = self.transform(b, mvp) else {
             return;
         };
+        let (a, b) = (self.to_screen.transform_pos(a), self.to_screen.transform_pos(b));
         self.painter_2d
             .add(Shape::dashed_line(&[a, b], stroke, dash_length, gap_length));
     }
@@ -108,7 +115,7 @@ impl Painter3D {
         let c = Vec3::new(a.x, b.y, a.z);
         let d = Vec3::new(b.x, a.y, b.z);
 
-        println!("{:?} {:?} {:?} {:?}", a, b, c, d);
+        // println!("{:?} {:?} {:?} {:?}", a, b, c, d);
 
         let Some(a) = self.transform(a, mvp) else {
             return;
@@ -126,23 +133,78 @@ impl Painter3D {
         let mut mesh = egui::Mesh::with_texture(texture_id);
         mesh.vertices.push(Vertex {
             pos: a,
-            uv: WHITE_UV,
-            color: Color32::RED,
+            uv: (1.0, 0.0).into(),
+            color: Color32::WHITE,
         });
         mesh.vertices.push(Vertex {
             pos: b,
-            uv: WHITE_UV,
-            color: Color32::GREEN,
+            uv: (0.0, 1.0).into(),
+            color: Color32::WHITE,
         });
         mesh.vertices.push(Vertex {
             pos: c,
-            uv: WHITE_UV,
-            color: Color32::BLUE,
+            uv: (1.0, 1.0).into(),
+            color: Color32::WHITE,
         });
         mesh.vertices.push(Vertex {
             pos: d,
-            uv: WHITE_UV,
-            color: Color32::ORANGE,
+            uv: (0.0, 0.0).into(),
+            color: Color32::WHITE,
+        });
+
+        mesh.add_triangle(0, 2, 3);
+        mesh.add_triangle(1, 2, 3);
+        self.painter_2d.add(mesh);
+    }
+
+    pub fn bound_rect2(
+        &self,
+        a: impl Into<Vec3>,
+        b: impl Into<Vec3>,
+        texture_id: TextureId,
+        mvp: Transform,
+    ) {
+        let a = a.into();
+        let b = b.into();
+
+        let c = Vec3::new(b.x, a.y, a.z);
+        let d = Vec3::new(a.x, a.y, b.z);
+
+        // println!("{:?} {:?} {:?} {:?}", a, b, c, d);
+
+        let Some(a) = self.transform(a, mvp) else {
+            return;
+        };
+        let Some(b) = self.transform(b, mvp) else {
+            return;
+        };
+        let Some(c) = self.transform(c, mvp) else {
+            return;
+        };
+        let Some(d) = self.transform(d, mvp) else {
+            return;
+        };
+
+        let mut mesh = egui::Mesh::with_texture(texture_id);
+        mesh.vertices.push(Vertex {
+            pos: a,
+            uv: (1.0, 0.0).into(),
+            color: Color32::WHITE,
+        });
+        mesh.vertices.push(Vertex {
+            pos: b,
+            uv: (0.0, 1.0).into(),
+            color: Color32::WHITE,
+        });
+        mesh.vertices.push(Vertex {
+            pos: c,
+            uv: (1.0, 1.0).into(),
+            color: Color32::WHITE,
+        });
+        mesh.vertices.push(Vertex {
+            pos: d,
+            uv: (0.0, 0.0).into(),
+            color: Color32::WHITE,
         });
 
         mesh.add_triangle(0, 2, 3);

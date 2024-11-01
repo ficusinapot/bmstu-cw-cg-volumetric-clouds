@@ -5,22 +5,24 @@ use std::ops::{Deref, DerefMut};
 
 #[derive(Default)]
 pub struct SceneObjects {
-    pub objects: Map<usize, Component>,
-    index: usize,
+    pub objects: Map<&'static str, Component>,
 }
 
 impl SceneObjects {
-    pub fn add_object(&mut self, object: impl Into<Component>) {
-        self.objects.insert(self.index, object.into());
-        self.index += 1;
+    pub fn add_object(&mut self, name: &'static str, object: impl Into<Component>) {
+        self.objects.insert(name, object.into());
     }
 
     pub fn remove_object(&mut self, _index: usize) {
         unimplemented!()
     }
 
-    pub fn get_object(&self, _index: usize) {
-        unimplemented!()
+    pub fn get_object(&self, name: &'static str) -> Option<&Component> {
+        self.objects.get(name)
+    }
+
+    pub fn get_mut_object(&mut self, name: &'static str) -> Option<&mut Component> {
+        self.objects.get_mut(name)
     }
 }
 
@@ -33,7 +35,7 @@ impl Visitable for SceneObjects {
 }
 
 impl Deref for SceneObjects {
-    type Target = Map<usize, Component>;
+    type Target = Map<&'static str, Component>;
 
     fn deref(&self) -> &Self::Target {
         &self.objects
