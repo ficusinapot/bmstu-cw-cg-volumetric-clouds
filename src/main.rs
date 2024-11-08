@@ -1,5 +1,5 @@
-mod config;
 mod app;
+mod config;
 
 use app::init_app;
 

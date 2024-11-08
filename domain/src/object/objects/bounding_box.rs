@@ -62,9 +62,9 @@ impl BoundingBox {
         [
             Vec3::new(x1, y1, z1),
             Vec3::new(x2, y1, z1),
-            Vec3::new(x1, y2, z1),
             Vec3::new(x1, y1, z2),
             Vec3::new(x2, y2, z1),
+            Vec3::new(x1, y2, z1),
             Vec3::new(x2, y1, z2),
             Vec3::new(x1, y2, z2),
             Vec3::new(x2, y2, z2),

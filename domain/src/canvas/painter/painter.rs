@@ -78,7 +78,10 @@ impl Painter3D {
         let Some(b) = self.transform(b, mvp) else {
             return;
         };
-        let (a, b) = (self.to_screen.transform_pos(a), self.to_screen.transform_pos(b));
+        let (a, b) = (
+            self.to_screen.transform_pos(a),
+            self.to_screen.transform_pos(b),
+        );
         self.painter_2d.line_segment([a, b], stroke);
     }
 
@@ -97,7 +100,10 @@ impl Painter3D {
         let Some(b) = self.transform(b, mvp) else {
             return;
         };
-        let (a, b) = (self.to_screen.transform_pos(a), self.to_screen.transform_pos(b));
+        let (a, b) = (
+            self.to_screen.transform_pos(a),
+            self.to_screen.transform_pos(b),
+        );
         self.painter_2d
             .add(Shape::dashed_line(&[a, b], stroke, dash_length, gap_length));
     }

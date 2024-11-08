@@ -2,7 +2,7 @@
 // TODO: use mint? But then we'd have to convert every time ...
 pub use glam;
 
-use glam::{Mat4, Vec3Swizzles, Vec4Swizzles};
+use glam::{Mat4, Vec3, Vec3Swizzles, Vec4Swizzles};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Transform {
@@ -39,16 +39,6 @@ impl Transform {
         let sc: egui::Vec2 = sc.into();
 
         (sc + self.rect.min.to_vec2(), dc.z)
-    }
-
-    pub fn egui_to_world(&self, _egui: egui::Vec2, _z: f32) -> glam::Vec3 {
-        /*
-        let egui: mint::Vector2<f32> = egui.into();
-        let egui: glam::Vec2 = egui.into();
-        let egui = egui.extend(z);
-        (self.inverse * egui.extend(1.)).xyz()
-        */
-        todo!()
     }
 
     /// Returns a Transform which has the given transformation prepended

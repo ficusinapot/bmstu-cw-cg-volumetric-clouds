@@ -17,19 +17,24 @@ impl Visitable for Camera {
 }
 
 impl Camera {
-    pub fn get_pixel_screen_position(&self, world_pos: Vec3, width: usize, height: usize) -> Option<(usize, usize)> {
+    pub fn get_pixel_screen_position(
+        &self,
+        world_pos: Vec3,
+        width: usize,
+        height: usize,
+    ) -> Option<(usize, usize)> {
         let view_matrix = self.view();
         let proj_matrix = self.projection(width as f32, height as f32);
-        
+
         let camera_pos = view_matrix.transform_point3(world_pos);
         let clip_space_pos = proj_matrix * camera_pos.extend(1.0);
 
         if clip_space_pos.w == 0.0 {
-            return None; 
+            return None;
         }
 
         let ndc_pos = clip_space_pos.xyz() / clip_space_pos.w;
-        
+
         let pixel_x = ((ndc_pos.x + 1.0) * 0.5 * width as f32) as isize;
         let pixel_y = ((1.0 - ndc_pos.y) * 0.5 * height as f32) as isize;
 
@@ -39,8 +44,14 @@ impl Camera {
             None
         }
     }
-    
-    pub fn get_pixel_world_position(&self, i: usize, j: usize, width: usize, height: usize) -> Vec3 {
+
+    pub fn get_pixel_world_position(
+        &self,
+        i: usize,
+        j: usize,
+        width: usize,
+        height: usize,
+    ) -> Vec3 {
         let aspect_ratio = width as f32 / height as f32;
         let fov_adjustment = (self.proj.fov / 2.0).tan();
 
@@ -55,7 +66,9 @@ impl Camera {
 
         let pixel_camera_position = Vec3::new(pixel_camera_x, pixel_camera_y, -1.0);
         let view_matrix = self.view();
-        let pixel_world_position = view_matrix.inverse().transform_point3(pixel_camera_position);
+        let pixel_world_position = view_matrix
+            .inverse()
+            .transform_point3(pixel_camera_position);
 
         pixel_world_position
     }
@@ -137,11 +150,7 @@ impl ArcBall {
 
     pub fn matrix(&self) -> Mat4 {
         let eye = self.eye();
-        Mat4::look_at_rh(
-            eye,
-            self.pivot - eye,
-            Vec3::new(0.0, 1.0, 0.0),
-        )
+        Mat4::look_at_rh(eye, self.pivot - eye, Vec3::new(0.0, 1.0, 0.0))
     }
 
     pub fn eye(&self) -> Vec3 {
