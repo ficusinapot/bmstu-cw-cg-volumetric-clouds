@@ -2,7 +2,7 @@ use crate::visitor::{Visitable, Visitor};
 use cgmath::num_traits::real::Real;
 use glam::Vec3;
 
-#[derive(Debug)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct BoundingBox {
     /// One of the corners of the rectangle, usually the left top one.
     pub min: Vec3,

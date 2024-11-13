@@ -1,16 +1,19 @@
+use std::ops::{Deref, DerefMut};
+use std::process::exit;
 use cgmath::num_traits::clamp;
 use egui::Color32;
-use glam::{IVec3, Vec3, Vec4};
-
+use glam::{FloatExt, IVec3, Vec3, Vec4, Vec4Swizzles};
 use crate::object::objects::BoundingBox;
 use crate::object::objects::texture3d::{Worley, WorleyBuilder};
 use crate::visitor::{Visitable, Visitor};
 
-fn remap(v: f32, min_old: f32, max_old: f32, min_new: f32, max_new: f32) -> f32 {
+#[inline]
+pub fn remap(v: f32, min_old: f32, max_old: f32, min_new: f32, max_new: f32) -> f32 {
     min_new + (v - min_old) * (max_new - min_new) / (max_old - min_old)
 }
 
-fn square_uv(uv: (f32, f32), screen_params: (f32, f32)) -> (f32, f32) {
+#[inline]
+pub fn square_uv(uv: (f32, f32), screen_params: (f32, f32)) -> (f32, f32) {
     let width = screen_params.0;
     let height = screen_params.1;
     let scale = 1000.0;
@@ -19,36 +22,42 @@ fn square_uv(uv: (f32, f32), screen_params: (f32, f32)) -> (f32, f32) {
     (x / scale, y / scale)
 }
 
-fn hg(a: f32, g: f32) -> f32 {
+#[inline]
+pub fn hg(a: f32, g: f32) -> f32 {
     let g2 = g * g;
     (1.0 - g2) / (4.0 * std::f32::consts::PI * (1.0 + g2 - 2.0 * g * a).powf(1.5))
 }
 
-fn phase(a: f32, phase_params: (f32, f32, f32, f32)) -> f32 {
-    let blend = 0.5;
-    let hg_blend = hg(a, phase_params.0) * (1.0 - blend) + hg(a, -phase_params.1) * blend;
-    phase_params.2 + hg_blend * phase_params.3
+#[inline]
+pub fn lerp_color(a: Color32, b: Color32, t: f32) -> Color32 {
+    Color32::from_rgba_unmultiplied(
+        (a.r() as f32).lerp(b.r() as f32, t) as u8,
+        (a.g() as f32).lerp(b.g() as f32, t) as u8,
+        (a.b() as f32).lerp(b.b() as f32, t) as u8,
+        (a.a() as f32).lerp(b.a() as f32, t) as u8,
+    )
 }
 
-fn beer(d: f32) -> f32 {
+#[inline]
+pub fn beer(d: f32) -> f32 {
     (-d).exp()
 }
 
+#[inline]
 fn remap01(v: f32, low: f32, high: f32) -> f32 {
     (v - low) / (high - low)
 }
 
-
-pub struct Cloud {
-    bounding_box: BoundingBox,
-    noise: Worley,
-    detail_noise: Worley,
-    pub clouds_offset: Vec3,
+#[derive(Default, Copy, Clone, Debug)]
+pub struct CloudBuilder {
+    pub bounding_box: BoundingBox,
+    pub offset: Vec3,
     pub cloud_scale: f32,
     pub density_threshold: f32,
     pub density_offset: f32,
     pub density_multiplier: f32,
 
+    pub num_steps_light: usize,
     pub num_steps: usize,
     pub ray_offset_strength: f32,
 
@@ -72,61 +81,31 @@ pub struct Cloud {
     pub light_color: Color32,
     pub col_a: Color32,
     pub col_b: Color32,
+    pub noise: WorleyBuilder,
+    pub detail_noise: WorleyBuilder,
 }
 
-impl Cloud {
-    pub fn new(bounding_box: impl Into<BoundingBox>) -> Self {
-        Self {
-            bounding_box: bounding_box.into(),
-            noise: Worley::default(),
-            detail_noise: Default::default(),
-            clouds_offset: Default::default(),
-            cloud_scale: 0.0,
-            density_threshold: 0.0,
-            density_multiplier: 0.0,
-            density_offset: 0.0,
-            num_steps: 0,
-            ray_offset_strength: 0.0,
-            alpha_threshold: 0,
-            color: Default::default(),
-            params: Default::default(),
-            map_size: Default::default(),
-            detail_noise_scale: 0.0,
-            detail_noise_weight: 0.0,
-            detail_weights: Default::default(),
-            shape_noise_weights: Default::default(),
-            phase_params: Default::default(),
-            shape_offset: Default::default(),
-            detail_offset: Default::default(),
-            light_absorption_toward_sun: 0.0,
-            light_absorption_through_cloud: 0.0,
-            darkness_threshold: 0.0,
-            light_color: Default::default(),
-            col_a: Default::default(),
-            col_b: Default::default(),
-        }
+impl CloudBuilder {
+    pub fn build(self) -> Cloud {
+        Cloud::build(self)
     }
-
-    pub fn regenerate_noise(&mut self, worley_builder: WorleyBuilder) {
-        self.noise = Worley::build(worley_builder);
+    
+    pub fn with_bounding_box(mut self, bounding_box: impl Into<BoundingBox>) -> Self {
+        self.bounding_box = bounding_box.into();
+        self
     }
-
-    pub fn regenerate_detail_noise(&mut self, worley_builder: WorleyBuilder) {
-        self.detail_noise = Worley::build(worley_builder);
-    }
-
     pub fn with_noise(mut self, worley_builder: WorleyBuilder) -> Self {
-        self.noise = Worley::build(worley_builder);
+        self.noise = worley_builder;
         self
     }
 
     pub fn with_detail_noise(mut self, worley_builder: WorleyBuilder) -> Self {
-        self.detail_noise = Worley::build(worley_builder);
+        self.detail_noise = worley_builder;
         self
     }
 
     pub fn with_clouds_offset(mut self, clouds_offset: Vec3) -> Self {
-        self.clouds_offset = clouds_offset;
+        self.offset = clouds_offset;
         self
     }
 
@@ -142,6 +121,21 @@ impl Cloud {
 
     pub fn with_density_multiplier(mut self, density_multiplier: f32) -> Self {
         self.density_multiplier = density_multiplier;
+        self
+    }
+
+    pub fn with_density_offset(mut self, density_offset: f32) -> Self {
+        self.density_offset = density_offset;
+        self
+    }
+
+    pub fn with_ray_offset_strength(mut self, ray_offset_strength: f32) -> Self {
+        self.ray_offset_strength = ray_offset_strength;
+        self
+    }
+
+    pub fn with_num_steps_light(mut self, num_steps: usize) -> Self {
+        self.num_steps_light = num_steps;
         self
     }
 
@@ -220,14 +214,60 @@ impl Cloud {
         self
     }
 
-    pub fn with_col_a(mut self, col_a: Color32) -> Self {
+    pub fn col_a(mut self, col_a: Color32) -> Self {
         self.col_a = col_a;
         self
     }
 
-    pub fn with_col_b(mut self, col_b: Color32) -> Self {
+    pub fn col_b(mut self, col_b: Color32) -> Self {
         self.col_b = col_b;
         self
+    }
+}
+
+#[derive(Default)]
+pub struct Cloud {
+    noise: Worley,
+    detail_noise: Worley,
+    pub cloud_params: CloudBuilder,
+}
+
+impl Deref for Cloud {
+    type Target = CloudBuilder;
+    fn deref(&self) -> &Self::Target {
+        &self.cloud_params
+    }
+}
+
+impl DerefMut for Cloud {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.cloud_params
+    }
+}
+
+impl Cloud {
+    pub fn build(cloud_params: CloudBuilder) -> Self {
+        let noise = cloud_params.noise.build();
+        let detail_noise = cloud_params.detail_noise.build();
+        Self {
+            cloud_params,
+            noise,
+            detail_noise
+        }
+    }
+    
+    pub fn phase(&self, a: f32) -> f32 {
+        let blend = 0.5;
+        let hg_blend = hg(a, self.phase_params.x) * (1.0 - blend) + hg(a, -self.phase_params.y) * blend;
+        self.phase_params.y + hg_blend * self.phase_params.z
+    }
+
+    pub fn regenerate_noise(&mut self, worley_builder: WorleyBuilder) {
+        self.noise = Worley::build(worley_builder);
+    }
+
+    pub fn regenerate_detail_noise(&mut self, worley_builder: WorleyBuilder) {
+        self.detail_noise = Worley::build(worley_builder);
     }
 
     pub fn bounding_box(&self) -> &BoundingBox {
@@ -240,11 +280,9 @@ impl Cloud {
 
         let bb = self.bounding_box();
         let size = self.bounding_box().size();
-        let bounds_centre = (self.bounding_box().min+self.bounding_box().max) * 0.5;
+        // let bounds_centre = (self.bounding_box().min+self.bounding_box().max) * 0.5;
         let uvw = (size * 0.5 + ray_pos) * BASE_SCALE * self.cloud_scale;
-        let shape_sample_pos = uvw + self.shape_offset * OFFSET_SPEED /* * time thingy here */;
-
-
+        let shape_sample_pos = uvw + self.shape_offset * OFFSET_SPEED + self.offset * OFFSET_SPEED /* * time thingy here */;
         const CONTAINER_EDGE_FADE_DST: f32 = 50.0;
         let dst_from_edge_x = CONTAINER_EDGE_FADE_DST.min((ray_pos.x - bb.min.x).min(bb.max.x - ray_pos.x));
         let dst_from_edge_z = CONTAINER_EDGE_FADE_DST.min((ray_pos.z - bb.min.z).min(bb.max.z - ray_pos.z));
@@ -257,18 +295,15 @@ impl Cloud {
             * clamp(remap(height_percent, 1.0, g_max, 0.0, 1.0), 0.0, 1.0);
         let height_gradient = height_gradient * edge_weight;
         
-        let shape_noise = self.noise.get(uvw);
-        let normalized_shape_weights = self.shape_noise_weights / self.shape_noise_weights.dot(Vec4::splat(1.0));
+        let shape_noise = self.noise.sample_level(shape_sample_pos);
+        let normalized_shape_weights = self.shape_noise_weights.normalize();
         let shape_fbm = shape_noise.dot(normalized_shape_weights) * height_gradient;
         let base_shape_density = shape_fbm + self.density_offset * 0.1;
-
         if base_shape_density > 0.0 {
-            // Sample detail noise
             let detail_sample_pos = uvw * self.detail_noise_scale + self.detail_offset * OFFSET_SPEED;
+            let detail_noise = self.detail_noise.sample_level(detail_sample_pos);
             
-            let detail_noise = self.detail_noise.get(detail_sample_pos);
-
-            let normalized_detail_weights = self.detail_weights / self.detail_weights.dot(Vec3::ONE);
+            let normalized_detail_weights = self.detail_weights.normalize();
             let detail_fbm = detail_noise.dot(normalized_detail_weights.extend(0.0));
 
             // Subtract detail noise from base shape (weighted by inverse density for edge erosion)
@@ -282,9 +317,22 @@ impl Cloud {
         }
     }
 
-    pub fn light_march(&self, position: Vec3) -> f32 {
-        0.0
+    pub(crate) fn light_march(&self, mut position: Vec3, world_space_light_pos0: Vec4) -> f32 {
+        let dir_to_light = world_space_light_pos0.xyz();
+        let dst_inside_box =  self.bounding_box().dst(position, dir_to_light).y;
+
+        let step_size = dst_inside_box / self.num_steps_light as f32;
+        let mut total_density = 0.0;
+
+        for _ in 0..self.num_steps_light {
+            position += dir_to_light * step_size;
+            total_density += self.sample_density(position).max(0.0) * step_size;
+        }
+
+        let transmittance = (-total_density * self.light_absorption_toward_sun).exp();
+        self.darkness_threshold + transmittance * (1.0 - self.darkness_threshold)
     }
+
 }
 
 impl Visitable for Cloud {

@@ -1,9 +1,10 @@
-use std::ops::{Index, IndexMut};
-
+use std::ops::{Deref, DerefMut, Index, IndexMut};
+use std::process::exit;
 use glam::{IVec3, UVec3, Vec3, Vec4};
 use rand::{Rng, SeedableRng};
 use rand::prelude::StdRng;
-use rayon::prelude::*;
+use crate::object::objects::Cloud;
+use crate::object::objects::cloud::CloudBuilder;
 
 const OFFSETS: [IVec3; 27] = [
     IVec3::new(0, 0, 0),
@@ -35,7 +36,7 @@ const OFFSETS: [IVec3; 27] = [
     IVec3::new(1, -1, 0),
 ];
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 struct RWTexture3D<T> {
     data: Vec<T>,
     x: usize,
@@ -54,6 +55,9 @@ impl<T> Index<UVec3> for RWTexture3D<T> {
 
 impl<T: Copy> RWTexture3D<T> {
     fn sample_level(&self, uvw: Vec3, _level: usize) -> T {
+        assert_ne!(self.x, 0);
+        assert_ne!(self.y, 0);
+        assert_ne!(self.z, 0);
         let u = ((uvw.x * self.x as f32) as isize).rem_euclid(self.x as isize) as u32;
         let v = ((uvw.y * self.y as f32) as isize).rem_euclid(self.y as isize) as u32;
         let w = ((uvw.z * self.z as f32) as isize).rem_euclid(self.z as isize) as u32;
@@ -69,7 +73,7 @@ impl<T> IndexMut<UVec3> for RWTexture3D<T> {
     }
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, Debug)]
 pub struct WorleyBuilder {
     pub seed: u64,
     pub num_points_a: usize,
@@ -133,105 +137,53 @@ impl WorleyBuilder {
     }
 
     pub(crate) fn build(self) -> Worley {
-        Worley::default()
-            .with_color_mask(self.color_mask)
-            .with_num_points_a(self.num_points_a)
-            .with_num_points_b(self.num_points_b)
-            .with_num_points_c(self.num_points_c)
-            .with_persistence(self.persistence)
-            .with_tile(self.tile)
-            .with_resolution(self.resolution)
-            .with_invert_noise(self.invert_noise)
-            .with_seed(self.seed)
+        Worley::build(self)
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Worley {
-    seed: u64,
-    num_points_a: usize,
-    num_points_b: usize,
-    num_points_c: usize,
     points_a: Vec<Vec3>,
     points_b: Vec<Vec3>,
     points_c: Vec<Vec3>,
-    persistence: f32,
-    invert_noise: bool,
     texture3d: RWTexture3D<Vec4>,
-    resolution: usize,
-    tile: f32,
-    color_mask: Vec4,
+    pub builder: WorleyBuilder
 }
 
+impl Deref for Worley {
+    type Target = WorleyBuilder;
+    fn deref(&self) -> &Self::Target {
+        &self.builder
+    }
+}
+
+impl DerefMut for Worley {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.builder
+    }
+}
 impl Worley {
-    fn with_seed(mut self, seed: u64) -> Self {
-        self.seed = seed;
-        self
-    }
-
-    fn with_num_points_a(mut self, num_points_a: usize) -> Self {
-        self.num_points_a = num_points_a;
-        self
-    }
-
-    fn with_num_points_b(mut self, num_points_b: usize) -> Self {
-        self.num_points_b = num_points_b;
-        self
-    }
-
-    fn with_num_points_c(mut self, num_points_c: usize) -> Self {
-        self.num_points_c = num_points_c;
-        self
-    }
-
-    fn with_persistence(mut self, persistence: f32) -> Self {
-        self.persistence = persistence;
-        self
-    }
-
-    fn with_invert_noise(mut self, invert_noise: bool) -> Self {
-        self.invert_noise = invert_noise;
-        self
-    }
-
-    fn with_resolution(mut self, resolution: usize) -> Self {
-        self.resolution = resolution;
-        self
-    }
-
-    fn with_tile(mut self, tile: f32) -> Self {
-        self.tile = tile;
-        self
-    }
-
-    fn with_color_mask(mut self, color: Vec4) -> Self {
-        self.color_mask = color;
-        self
-    }
-
     pub fn build(worley_builder: WorleyBuilder) -> Self {
-        let mut worley = worley_builder.build();
-        let mut rng = StdRng::seed_from_u64(worley.seed);
-        worley.points_a = Self::create_worley_points_buffer(&mut rng, worley.num_points_a);
-        worley.points_b = Self::create_worley_points_buffer(&mut rng, worley.num_points_b);
-        worley.points_c = Self::create_worley_points_buffer(&mut rng, worley.num_points_c);
-
-        let resolution = worley.resolution;
-        worley.texture3d = RWTexture3D {
-            data: {
-                let len = resolution * resolution * resolution;
-                let mut vec = Vec::with_capacity(resolution * resolution * resolution);
-                unsafe { vec.set_len(len) }
-                vec.fill(Vec4::ZERO);
-                vec
+        let resolution = worley_builder.resolution;
+        let mut rng = StdRng::seed_from_u64(worley_builder.seed);
+        let mut w = Self {
+            points_a: Self::create_worley_points_buffer(&mut rng, worley_builder.num_points_a),
+            points_b: Self::create_worley_points_buffer(&mut rng, worley_builder.num_points_b),
+            points_c: Self::create_worley_points_buffer(&mut rng, worley_builder.num_points_c),
+            texture3d: RWTexture3D {
+                data: {
+                    let len = resolution * resolution * resolution;
+                    vec![Vec4::ZERO; len]
+                },
+                x: resolution,
+                y: resolution,
+                z: resolution,
             },
-            x: resolution,
-            y: resolution,
-            z: resolution,
+            builder: worley_builder
         };
-
-        worley.generate_noise();
-        worley
+        
+        w.generate_noise();
+        w
     }
 
     fn generate_noise(&mut self) {
@@ -239,28 +191,30 @@ impl Worley {
         use std::sync::{Arc, Mutex};
         let min_max_lock = Arc::new(Mutex::new([i32::MAX, i32::MIN]));
 
+        
+        let params = &self.builder;
         self.texture3d
             .data
             .par_iter_mut()
             .enumerate()
             .for_each(|(index, val)| {
                 let id = UVec3::new(
-                    (index % self.resolution) as u32,
-                    ((index / self.resolution) % self.resolution) as u32,
-                    (index / (self.resolution * self.resolution)) as u32,
+                    (index % params.resolution) as u32,
+                    ((index / params.resolution) % params.resolution) as u32,
+                    (index / (params.resolution * params.resolution)) as u32,
                 );
-                let pos = id.as_vec3() / self.resolution as f32;
+                let pos = id.as_vec3() / params.resolution as f32;
 
-                let noise_sum = Self::worley(&self.points_a, self.num_points_a, pos, self.tile)
-                    + Self::worley(&self.points_b, self.num_points_b, pos, self.tile)
-                        * self.persistence
-                    + Self::worley(&self.points_c, self.num_points_c, pos, self.tile)
-                        * self.persistence
-                        * self.persistence;
+                let noise_sum = Self::worley(&self.points_a, params.num_points_a, pos, params.tile)
+                    + Self::worley(&self.points_b, params.num_points_b, pos, params.tile)
+                        * params.persistence
+                    + Self::worley(&self.points_c, params.num_points_c, pos, params.tile)
+                        * params.persistence
+                        * params.persistence;
 
                 let noise_sum =
-                    noise_sum / (1.0 + self.persistence + self.persistence * self.persistence);
-                let noise_sum = if self.invert_noise {
+                    noise_sum / (1.0 + params.persistence + params.persistence * params.persistence);
+                let noise_sum = if params.invert_noise {
                     1.0 - noise_sum
                 } else {
                     noise_sum
@@ -272,7 +226,7 @@ impl Worley {
                 min_max_lock[1] = min_max_lock[1].max(scaled_val);
                 drop(min_max_lock);
 
-                *val = *val * (1.0 - self.color_mask) + noise_sum * self.color_mask;
+                *val = *val * (1.0 - params.color_mask) + noise_sum * params.color_mask;
             });
 
         let min_max = Arc::try_unwrap(min_max_lock)
@@ -283,11 +237,11 @@ impl Worley {
             let min_val = min_max[0] as f32 / 10_000_000.0;
             let max_val = min_max[1] as f32 / 10_000_000.0;
             let normalized_val = (*val - min_val) / (max_val - min_val);
-            *val = *val * (1.0 - self.color_mask) + normalized_val * self.color_mask;
+            *val = *val * (1.0 - params.color_mask) + normalized_val * params.color_mask;
         });
     }
 
-    pub fn get(&self, vec3: Vec3) -> Vec4 {
+    pub fn sample_level(&self, vec3: Vec3) -> Vec4 {
         self.texture3d.sample_level(vec3, 0)
     }
 

@@ -237,12 +237,12 @@ impl Painter3D {
         self.painter_2d.add(mesh);
     }
 
-    // fn circle_filled(&self, center: Vec3, radius: f32, fill_color: impl Into<Color32>) {
-    //     let Some(center) = self.transform(center) else {
-    //         return;
-    //     };
-    //     self.painter_2d.circle_filled(center, radius, fill_color);
-    // }
+    pub fn circle_filled(&self, center: Vec3, radius: f32, fill_color: impl Into<Color32>, mvp: Transform) {
+        let Some(center) = self.transform(center, mvp) else {
+            return;
+        };
+        self.painter_2d.circle_filled(center, radius, fill_color);
+    }
     //
     // fn circle(&self, center: Vec3, radius: f32, stroke: impl Into<Stroke>) {
     //     let Some(center) = self.transform(center) else {

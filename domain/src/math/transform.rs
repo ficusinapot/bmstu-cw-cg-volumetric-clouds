@@ -2,7 +2,7 @@
 // TODO: use mint? But then we'd have to convert every time ...
 pub use glam;
 
-use glam::{Mat4, Vec3, Vec3Swizzles, Vec4Swizzles};
+use glam::{Mat4, Vec3Swizzles, Vec4Swizzles};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Transform {

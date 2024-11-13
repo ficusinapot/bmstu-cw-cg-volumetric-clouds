@@ -1,4 +1,3 @@
-use crate::facade::Command;
 use crate::object::Component;
 use crate::scene::scene_composite::SceneObjects;
 use crate::visitor::{Visitable, Visitor};

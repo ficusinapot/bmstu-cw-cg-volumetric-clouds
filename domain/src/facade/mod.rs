@@ -4,4 +4,4 @@ pub mod facade;
 
 pub use command::*;
 
-pub use facade::Facade;
+pub use facade::{Facade, Executor};
