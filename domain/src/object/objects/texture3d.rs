@@ -1,13 +1,14 @@
 use std::ops::{Deref, DerefMut, Index, IndexMut};
-use std::process::exit;
+
+use cgmath::num_traits::Euclid;
 use glam::{IVec3, UVec3, Vec3, Vec4};
-use rand::{Rng, SeedableRng};
 use rand::prelude::StdRng;
-use crate::object::objects::Cloud;
-use crate::object::objects::cloud::CloudBuilder;
+use rand::{Rng, SeedableRng};
 
 const OFFSETS: [IVec3; 27] = [
+    // centre
     IVec3::new(0, 0, 0),
+    // front face
     IVec3::new(0, 0, 1),
     IVec3::new(-1, 1, 1),
     IVec3::new(-1, 0, 1),
@@ -17,6 +18,7 @@ const OFFSETS: [IVec3; 27] = [
     IVec3::new(1, 1, 1),
     IVec3::new(1, 0, 1),
     IVec3::new(1, -1, 1),
+    // back face
     IVec3::new(0, 0, -1),
     IVec3::new(-1, 1, -1),
     IVec3::new(-1, 0, -1),
@@ -26,6 +28,7 @@ const OFFSETS: [IVec3; 27] = [
     IVec3::new(1, 1, -1),
     IVec3::new(1, 0, -1),
     IVec3::new(1, -1, -1),
+    // ring around centre
     IVec3::new(-1, 1, 0),
     IVec3::new(-1, 0, 0),
     IVec3::new(-1, -1, 0),
@@ -136,7 +139,7 @@ impl WorleyBuilder {
         self
     }
 
-    pub(crate) fn build(self) -> Worley {
+    pub fn build(self) -> Worley {
         Worley::build(self)
     }
 }
@@ -147,7 +150,7 @@ pub struct Worley {
     points_b: Vec<Vec3>,
     points_c: Vec<Vec3>,
     texture3d: RWTexture3D<Vec4>,
-    pub builder: WorleyBuilder
+    pub builder: WorleyBuilder,
 }
 
 impl Deref for Worley {
@@ -179,9 +182,9 @@ impl Worley {
                 y: resolution,
                 z: resolution,
             },
-            builder: worley_builder
+            builder: worley_builder,
         };
-        
+
         w.generate_noise();
         w
     }
@@ -191,7 +194,6 @@ impl Worley {
         use std::sync::{Arc, Mutex};
         let min_max_lock = Arc::new(Mutex::new([i32::MAX, i32::MIN]));
 
-        
         let params = &self.builder;
         self.texture3d
             .data
@@ -205,21 +207,23 @@ impl Worley {
                 );
                 let pos = id.as_vec3() / params.resolution as f32;
 
-                let noise_sum = Self::worley(&self.points_a, params.num_points_a, pos, params.tile)
-                    + Self::worley(&self.points_b, params.num_points_b, pos, params.tile)
-                        * params.persistence
-                    + Self::worley(&self.points_c, params.num_points_c, pos, params.tile)
-                        * params.persistence
-                        * params.persistence;
-
                 let noise_sum =
-                    noise_sum / (1.0 + params.persistence + params.persistence * params.persistence);
+                    Worley::worley(&self.points_a, params.num_points_a, pos, params.tile)
+                        + Worley::worley(&self.points_b, params.num_points_b, pos, params.tile)
+                            * params.persistence
+                        + Worley::worley(&self.points_c, params.num_points_c, pos, params.tile)
+                            * params.persistence
+                            * params.persistence;
+
+                let max_val =
+                    1.0 + (params.persistence) + (params.persistence * params.persistence);
+
+                let noise_sum = noise_sum / max_val;
                 let noise_sum = if params.invert_noise {
                     1.0 - noise_sum
                 } else {
                     noise_sum
                 };
-
                 let scaled_val = (noise_sum * 10_000_000.0) as i32;
                 let mut min_max_lock = min_max_lock.lock().unwrap();
                 min_max_lock[0] = min_max_lock[0].min(scaled_val);
@@ -232,7 +236,7 @@ impl Worley {
         let min_max = Arc::try_unwrap(min_max_lock)
             .expect("one strong reference")
             .into_inner()
-            .expect("No holding the mutex");
+            .expect("No one holding the mutex");
         self.texture3d.data.par_iter_mut().for_each(|val| {
             let min_val = min_max[0] as f32 / 10_000_000.0;
             let max_val = min_max[1] as f32 / 10_000_000.0;
@@ -272,15 +276,15 @@ impl Worley {
         let mut min_sqrt_dist: f32 = 1.0;
 
         let num_cells = num_cells as i32;
-        for i in 0..27 {
-            let adj_id = cell_id + OFFSETS[i];
+        for i in OFFSETS {
+            let adj_id = cell_id + i;
             if adj_id.min_element() == -1 || adj_id.max_element() == num_cells {
                 let wrapped_id = (adj_id + num_cells) % num_cells;
                 let adj_cell_index =
                     wrapped_id.x + num_cells * (wrapped_id.y + wrapped_id.z * num_cells);
                 let wrapped_point = points[adj_cell_index as usize];
-                for j in 0..27 {
-                    let sample_offset = sample_pos - (wrapped_point + OFFSETS[j].as_vec3());
+                for j in OFFSETS {
+                    let sample_offset = sample_pos - (wrapped_point + j.as_vec3());
                     min_sqrt_dist = min_sqrt_dist.min(sample_offset.dot(sample_offset));
                 }
             } else {
@@ -291,5 +295,53 @@ impl Worley {
         }
 
         min_sqrt_dist.sqrt()
+    }
+}
+
+// todo
+#[derive(Default, Clone, Copy, Debug)]
+pub struct BlueNoiseBuilder {
+    pub seed: u64,
+    pub minimum_distance: usize,
+    pub num_samples: usize,
+}
+
+impl BlueNoiseBuilder {
+    pub(crate) fn build(self) -> BlueNoise {
+        BlueNoise::build(self)
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct BlueNoise {
+    texture3d: RWTexture3D<Vec4>,
+    pub builder: BlueNoiseBuilder,
+}
+
+impl Deref for BlueNoise {
+    type Target = BlueNoiseBuilder;
+    fn deref(&self) -> &Self::Target {
+        &self.builder
+    }
+}
+
+impl DerefMut for BlueNoise {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.builder
+    }
+}
+
+impl BlueNoise {
+    pub fn build(blue_noise_builder: BlueNoiseBuilder) -> Self {
+        let _rng = StdRng::seed_from_u64(blue_noise_builder.seed);
+
+        todo!()
+    }
+    fn generate_noise(&mut self) {
+        todo!()
+    }
+
+    pub fn sample_level(&self, vec3: Vec3) -> Vec4 {
+        self.texture3d.sample_level(vec3, 0)
     }
 }

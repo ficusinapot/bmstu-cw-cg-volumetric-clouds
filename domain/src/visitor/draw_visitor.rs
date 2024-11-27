@@ -1,20 +1,25 @@
-use cgmath::num_traits::Pow;
-use egui::{Color32, Pos2, Stroke, TextureId};
+use std::ops::SubAssign;
+
+use cgmath::num_traits::{Pow, Signed};
+use egui::{Color32, Pos2, Rect, Stroke, TextureId, Vec2};
 use glam::{Vec3, Vec4, Vec4Swizzles};
 use log::debug;
+use rand::random;
 
 use crate::canvas::painter::Painter3D;
 use crate::math::Transform;
 use crate::object::camera::Camera;
-use crate::object::objects::{BoundingBox, Grid};
-use crate::object::objects::cloud::{Cloud, hg, lerp_color};
+use crate::object::objects::cloud::{beer, hg, Cloud};
+use crate::object::objects::{BoundingBox, Grid, Sun};
 use crate::visitor::Visitor;
 
 pub struct DrawVisitor<'a> {
     canvas: &'a Painter3D,
     camera: &'a Camera,
     stroke: Stroke,
+    background_color: Color32,
     mvp: Transform,
+    sun: Option<&'a Sun>,
 }
 
 impl<'a> DrawVisitor<'a> {
@@ -34,8 +39,25 @@ impl<'a> DrawVisitor<'a> {
             canvas,
             camera,
             stroke: Stroke::new(1.0, Color32::GRAY),
+            background_color: Color32::WHITE,
             mvp: Transform::new(camera_tf, resp_rect),
+            sun: None,
         }
+    }
+
+    pub fn with_sun(mut self, sun: &'a Sun) -> Self {
+        self.sun = Some(sun);
+        self
+    }
+
+    pub fn with_color(mut self, color32: Color32) -> Self {
+        self.background_color = color32;
+        self
+    }
+
+    pub fn with_stroke(mut self, stroke: Stroke) -> Self {
+        self.stroke = stroke;
+        self
     }
 }
 
@@ -61,7 +83,7 @@ impl<'a> Visitor for DrawVisitor<'a> {
         });
 
         let (min_tuple, max_tuple) = transformed.fold(
-            (Pos2::new(f32::MAX, f32::MAX), Pos2::new(f32::MIN, f32::MIN)),
+            (Pos2::new(width, height), Pos2::new(0.0, 0.0)),
             |(min, max), p| {
                 (
                     Pos2::new(min.x.min(p.x), min.y.min(p.y)),
@@ -69,14 +91,19 @@ impl<'a> Visitor for DrawVisitor<'a> {
                 )
             },
         );
-
+        // self.canvas.rect_stroke(Rect::from_two_pos((9.0, 9.0).into(), max_tuple), 1.0, Stroke::new(1.0, Color32::BLACK) );
         let wh = max_tuple - min_tuple;
         let (w, h) = (wh.x as usize, wh.y as usize);
 
-        // self.canvas
-        //     .circle_filled([2.0, 2.0, 0.0].into(), 10.0, Color32::YELLOW, self.mvp);
+        // self.canvas.rect_stroke(Rect::from_two_pos(min_tuple, max_tuple), 1.0, Stroke::new(1.0, Color32::BLACK) );
+        // self.visit_bounding_box(bb);
+        // println!("{:?}", min_tuple);
+        // return;
 
-        let mut img = egui::ColorImage::new([w, h], Color32::TRANSPARENT);
+        // self.canvas
+        //     .circle_filled([2.0, 2.0, 0.0].into(), 10.0, Color32::BL, self.mvp);
+
+        let mut img = egui::ColorImage::new([w, h], self.background_color);
         img.pixels
             .par_iter_mut()
             .enumerate()
@@ -85,7 +112,7 @@ impl<'a> Visitor for DrawVisitor<'a> {
                 let j = idx % w;
 
                 *pixel = {
-                    let sun_pos = Vec4::new(10.0, 10.0, 0.0, 0.0);
+                    let sun_pos = self.sun.map(|x| x.get_pos()).unwrap_or_default();
                     let col = Vec3::new(1.0, 1.0, 1.0);
                     let ray_origin = self.camera.get_position();
                     let i = i + min_tuple.y as usize;
@@ -93,24 +120,29 @@ impl<'a> Visitor for DrawVisitor<'a> {
                     let ray_dir = (self.camera.get_pixel_world_position(i, j, 1056, 900)
                         - ray_origin)
                         .normalize();
+                    // println!("{:?} {:?}", ray_origin, ray_dir);
+                    // let ray_dir = self.camera.get_direction().normalize();
 
                     let ray_box_info = bb.dst(ray_origin, ray_dir);
                     let dst_to_box = ray_box_info.x;
                     let dst_inside_box = ray_box_info.y;
 
+                    let _: f32 = random();
+                    let random_offset = 1.0;
+                    // let random_offset = random_offset * cloud.ray_offset_strength;
+
                     let mut dst_travelled = 0.0;
-                    let dst_limit = dst_inside_box.min(f32::INFINITY - dst_to_box);
+                    let dst_limit = dst_inside_box.min(f32::INFINITY);
                     let step_size = dst_inside_box / cloud.num_steps as f32; //?
 
                     let mut transmittance = 1.0;
                     let mut light_energy = Vec3::ZERO;
 
                     let entry_point = ray_origin + dst_to_box * ray_dir;
-                    let cos_angle = ray_dir.dot(sun_pos.xyz());
-                    let phaze_val = cloud.phase(cos_angle);
-
+                    let cos_angle = ray_dir.dot(sun_pos);
+                    let phaze_val = cloud.phase(cos_angle.abs());
                     if dst_inside_box <= 0.0 {
-                        Color32::TRANSPARENT
+                        self.background_color
                     } else {
                         while dst_travelled < dst_limit {
                             let ray_pos = entry_point + ray_dir * dst_travelled;
@@ -122,9 +154,9 @@ impl<'a> Visitor for DrawVisitor<'a> {
                                     * transmittance
                                     * light_transmittance
                                     * phaze_val;
-                                transmittance *=
-                                    (-density * step_size * cloud.light_absorption_through_cloud)
-                                        .exp();
+                                transmittance *= beer(
+                                    density * step_size * cloud.light_absorption_through_cloud,
+                                );
                                 if transmittance < 0.01 {
                                     break;
                                 }
@@ -132,41 +164,56 @@ impl<'a> Visitor for DrawVisitor<'a> {
                             dst_travelled += step_size;
                         }
 
-                        let col_a: Vec4 = cloud.col_a
+                        let background_color: Vec4 = self
+                            .background_color
                             .to_array()
-                            .map(|x| x as f32 / 255.0).into();
+                            .map(|x| x as f32 / 255.0)
+                            .into();
+                        let background_color = background_color.xyz();
+
+                        let col_a: Vec4 = cloud.col_a.to_array().map(|x| x as f32 / 255.0).into();
                         let col_a = col_a.xyz();
-                        
-                        let col_b: Vec4 = cloud.col_b
-                            .to_array()
-                            .map(|x| x as f32 / 255.0).into();
+
+                        let col_b: Vec4 = cloud.col_b.to_array().map(|x| x as f32 / 255.0).into();
                         let col_b = col_b.xyz();
-                        
-                        let light_color: Vec4 = cloud.light_color
+
+                        let light_color: Vec4 = cloud
+                            .light_color
                             .to_array()
-                            .map(|x| x as f32 / 255.0).into();
+                            .map(|x| x as f32 / 255.0)
+                            .into();
                         let light_color = light_color.xyz();
 
-                        let sky_col_base = col_a.lerp(col_b, ray_dir.y.clamp(0.0, 1.0).abs().sqrt());
-                        let background_col = col;
-                        let dst_fog = 1.0;
+                        let sky_col_base =
+                            col_a.lerp(col_b, ray_dir.y.clamp(0.0, 1.0).abs().sqrt());
+                        let depth = 100000.0;
+                        let dst_fog = 1.0 - (-0.0_f32.max(depth) * 8.0 * 0.0001).exp();
                         let sky = dst_fog * sky_col_base;
-                        let background_col = background_col * (1.0 - dst_fog) + sky;
+                        let background_color = background_color * (1.0 - dst_fog) + sky;
 
-                        let cos_angle = ray_dir.dot(Vec3::new(10.0, 10.0, 10.0));
-                        let phase_val = cloud.phase(cos_angle);
-                        
-                        let focused_eye_cos = cos_angle.clamp(0.0, 1.0).pow(cloud.params.x);
-                        let sun = hg(focused_eye_cos, 0.9995).clamp(0.0, 1.0) * transmittance;
-                        
+                        let focused_eye_cos = cos_angle
+                            .clamp(-std::f32::consts::PI, std::f32::consts::PI)
+                            .pow(cloud.params.x);
+                        let sun = hg(focused_eye_cos, 0.9995).clamp(-1.0, 1.0) * transmittance;
+
                         let cloud_col = light_energy * light_color;
-                        let col = background_col * transmittance + cloud_col;
-                        
-                        let col = col.clamp(Vec3::ZERO,Vec3::ONE) * (1.0 - sun) + light_color * sun;
-                        
-                        let (r, g, b) = col.into();
-                        let (r, g, b) = (r * 255.0, g * 255.0, b * 255.0);
-                        Color32::from_rgba_unmultiplied(r as u8, g as u8, b as u8, 255)
+                        let col = background_color * transmittance + cloud_col;
+                        if transmittance >= 0.01 {
+                            self.background_color.linear_multiply(sun)
+                        } else {
+                            let col =
+                                col.clamp(Vec3::ZERO, Vec3::ONE) * (1.0 - sun) + light_color * sun;
+
+                            // let col = Vec3::ONE;
+                            // let col = (light_energy * light_color) + col * transmittance;
+                            let (r, g, b) = col.into();
+                            let (r, g, b) = (r * 255.0, g * 255.0, b * 255.0);
+                            // if light_energy.max_element() <= 0.0 {
+                            //     self.background_color
+                            // } else {
+                            Color32::from_rgba_unmultiplied(r as u8, g as u8, b as u8, 255)
+                            // }}
+                        }
                     }
                 };
             });
@@ -178,7 +225,7 @@ impl<'a> Visitor for DrawVisitor<'a> {
         let textureid = TextureId::from(&handle);
         self.canvas.image(
             textureid,
-            egui::Rect::from_two_pos(min_tuple.into(), max_tuple.into()),
+            egui::Rect::from_two_pos(min_tuple, max_tuple),
             egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
             Color32::WHITE,
         );
@@ -265,13 +312,35 @@ impl<'a> Visitor for DrawVisitor<'a> {
     }
 
     fn visit_bounding_box(&self, bb: &BoundingBox) {
-        let corners = bb.corners();
-
-        let edges = bb.edges();
-
+        let (x1, y1, z1) = bb.min.into();
+        let (x2, y2, z2) = bb.max.into();
+        let corners = [
+            (x1, y1, z1),
+            (x2, y1, z1),
+            (x1, y2, z1),
+            (x1, y1, z2),
+            (x2, y2, z1),
+            (x2, y1, z2),
+            (x1, y2, z2),
+            (x2, y2, z2),
+        ];
+        let edges = [
+            (0, 1),
+            (0, 2),
+            (0, 3),
+            (1, 4),
+            (2, 4),
+            (1, 5),
+            (3, 5),
+            (2, 6),
+            (3, 6),
+            (4, 7),
+            (6, 7),
+            (5, 7),
+        ];
         for &(i1, i2) in &edges {
-            let (x1, y1, z1) = corners[i1].into();
-            let (x2, y2, z2) = corners[i2].into();
+            let (x1, y1, z1) = corners[i1];
+            let (x2, y2, z2) = corners[i2];
             self.canvas.dashed_line(
                 Vec3::new(x1, y1, z1),
                 Vec3::new(x2, y2, z2),
@@ -281,5 +350,11 @@ impl<'a> Visitor for DrawVisitor<'a> {
                 self.mvp,
             );
         }
+    }
+
+    fn visit_sun(&self, sun: &Sun) {
+        let radius = sun.get_pos() + Vec3::new(0.1, 0.0, 0.0);
+        self.canvas
+            .circle_filled(sun.get_pos(), radius, Color32::LIGHT_YELLOW, self.mvp);
     }
 }

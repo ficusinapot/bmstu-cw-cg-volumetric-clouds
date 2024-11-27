@@ -14,6 +14,7 @@ pub struct Painter3D {
     painter_2d: egui::Painter,
     resp_rect: egui::Rect,
     to_screen: egui::emath::RectTransform,
+    pub color: Color32,
 }
 
 impl Deref for Painter3D {
@@ -24,7 +25,7 @@ impl Deref for Painter3D {
 }
 
 impl Painter3D {
-    pub fn new(painter_2d: egui::Painter, resp_rect: egui::Rect) -> Self {
+    pub fn new(painter_2d: egui::Painter, resp_rect: egui::Rect, color: Color32) -> Self {
         Self {
             painter_2d,
             resp_rect,
@@ -32,6 +33,7 @@ impl Painter3D {
                 egui::Rect::from_min_size(egui::Pos2::ZERO, resp_rect.size()),
                 resp_rect.translate(egui::Pos2::new(-15.0, -15.0).to_vec2()),
             ),
+            color,
         }
     }
 
@@ -237,11 +239,20 @@ impl Painter3D {
         self.painter_2d.add(mesh);
     }
 
-    pub fn circle_filled(&self, center: Vec3, radius: f32, fill_color: impl Into<Color32>, mvp: Transform) {
+    pub fn circle_filled(
+        &self,
+        center: Vec3,
+        radius: Vec3,
+        fill_color: impl Into<Color32>,
+        mvp: Transform,
+    ) {
         let Some(center) = self.transform(center, mvp) else {
             return;
         };
-        self.painter_2d.circle_filled(center, radius, fill_color);
+        let Some(radius) = self.transform(radius, mvp) else {
+            return;
+        };
+        self.painter_2d.circle_filled(center, (radius - center).length(), fill_color);
     }
     //
     // fn circle(&self, center: Vec3, radius: f32, stroke: impl Into<Stroke>) {

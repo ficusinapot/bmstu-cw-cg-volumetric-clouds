@@ -65,12 +65,9 @@ impl Camera {
         let pixel_camera_y = pixel_screen_y * fov_adjustment;
 
         let pixel_camera_position = Vec3::new(pixel_camera_x, pixel_camera_y, -1.0);
-        let view_matrix = self.view();
-        let pixel_world_position = view_matrix
+        self.view()
             .inverse()
-            .transform_point3(pixel_camera_position);
-
-        pixel_world_position
+            .transform_point3(pixel_camera_position)
     }
 
     pub fn get_position(&self) -> Vec3 {
@@ -172,8 +169,8 @@ impl ArcBallController {
 
     pub fn pan(&mut self, arcball: &mut ArcBall, delta_x: f32, delta_y: f32) {
         let delta = Vec4::new(
-            (-delta_x as f32) * arcball.distance,
-            (delta_y as f32) * arcball.distance,
+            (-delta_x) * arcball.distance,
+            (delta_y) * arcball.distance,
             0.0,
             0.0,
         ) * self.pan_sensitivity;
@@ -195,9 +192,9 @@ impl Default for ArcBall {
     fn default() -> Self {
         Self {
             pivot: Vec3::new(0.0, 0.5, 0.0),
-            pitch: 0.6,
+            pitch: 0.0,
             yaw: 0.0,
-            distance: 5.,
+            distance: 10.,
         }
     }
 }

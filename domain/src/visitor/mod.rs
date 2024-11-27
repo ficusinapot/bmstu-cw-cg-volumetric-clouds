@@ -1,6 +1,6 @@
 use crate::object::camera::Camera;
 use crate::object::objects::cloud::Cloud;
-use crate::object::objects::{BoundingBox, Grid};
+use crate::object::objects::{BoundingBox, Grid, Sun};
 use crate::scene::scene_composite::SceneObjects;
 
 pub mod draw_visitor;
@@ -17,8 +17,8 @@ pub trait Visitor: Sized {
     }
 
     fn visit_camera(&self, _camera: &Camera) {}
-
     fn visit_cloud(&self, _cloud: &Cloud) {}
     fn visit_grid(&self, _grid: &Grid) {}
     fn visit_bounding_box(&self, _bb: &BoundingBox) {}
+    fn visit_sun(&self, _bb: &Sun) {}
 }

@@ -26,14 +26,17 @@ impl BoundingBox {
         }
     }
 
+    #[inline]
     pub fn size(&self) -> Vec3 {
         self.max - self.min
     }
 
+    #[inline]
     pub fn center(&self) -> Vec3 {
         0.5 * (self.max + self.min)
     }
 
+    #[inline]
     pub fn contains(&self, position: Vec3) -> bool {
         (self.min.x..=self.max.x).contains(&position.x)
             && (self.min.y..=self.max.y).contains(&position.y)
@@ -56,6 +59,7 @@ impl BoundingBox {
         (dst_to_box, dst_inside_box).into()
     }
 
+    #[inline]
     pub fn corners(&self) -> [Vec3; 8] {
         let (x1, y1, z1) = self.min.into();
         let (x2, y2, z2) = self.max.into();
@@ -71,25 +75,27 @@ impl BoundingBox {
         ]
     }
 
+    #[inline]
     pub fn edges(&self) -> [(usize, usize); 12] {
         [
             (0, 1),
-            (0, 2),
-            (0, 3),
-            (1, 4),
-            (2, 4),
             (1, 5),
-            (3, 5),
-            (2, 6),
-            (3, 6),
-            (4, 7),
-            (6, 7),
-            (5, 7),
+            (5, 4),
+            (4, 0), // нижнее основание
+            (2, 3),
+            (3, 7),
+            (7, 6),
+            (6, 2), // верхнее основание
+            (0, 2),
+            (1, 3),
+            (4, 6),
+            (5, 7), // вертикальные рёбра
         ]
     }
 }
 
 impl Visitable for BoundingBox {
+    #[inline]
     fn accept(&self, visitor: &impl Visitor) {
         visitor.visit_bounding_box(self)
     }

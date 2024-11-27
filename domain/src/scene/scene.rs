@@ -1,3 +1,4 @@
+use log::debug;
 use crate::object::Component;
 use crate::scene::scene_composite::SceneObjects;
 use crate::visitor::{Visitable, Visitor};
@@ -9,6 +10,7 @@ pub struct Scene {
 
 impl Scene {
     pub fn add_object(&mut self, name: &'static str, object: impl Into<Component>) {
+        debug!("{:?}", self.objects);
         self.objects.add_object(name, object)
     }
 
