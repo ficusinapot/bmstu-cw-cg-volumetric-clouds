@@ -17,6 +17,20 @@ impl Sun {
         info!("Sun created at {:?}", pos);
         Self { pos, a, d }
     }
+    
+    pub fn calculate_sky_color(&self) -> egui::Color32 {
+        let sun_angle = self.a.to_radians().clamp(0.0, 1.0);
+        
+        let horizon_color = Vec4::new(1.0, 0.6, 0.3, 1.0);
+        let sky_color = Vec4::new(0.2, 0.6, 1.0, 1.0);
+        let color = sky_color.lerp(horizon_color, 1.0 - sun_angle);
+        
+        egui::Color32::from_rgb(
+            (color.x * 255.0) as u8,
+            (color.y * 255.0) as u8,
+            (color.z * 255.0) as u8,
+        )
+    }
 
     #[inline]
     pub fn get_pos(&self) -> Vec3 {

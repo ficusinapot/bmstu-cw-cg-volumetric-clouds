@@ -500,7 +500,7 @@ impl App {
                             let resp = ui.add(
                                 egui::widgets::Slider::new(
                                     &mut self.cloud.height_map_factor,
-                                    0.0..=50.0,
+                                    0.0..=1.0,
                                 )
                                 .drag_value_speed(0.01),
                             );
@@ -508,26 +508,26 @@ impl App {
                             if resp.changed() {
                                 self.executor.exec(SceneCommand::SetHeightMapFactor(
                                     "cloud",
-                                    self.cloud.height_map_factor,
+                                    self.cloud.height_map_factor + 2.0,
                                 ));
                             }
                         });
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(
-                        //         egui::widgets::Slider::new(
-                        //             &mut self.cloud.edge_distance,
-                        //             0.0..=50.0,
-                        //         )
-                        //         .drag_value_speed(0.01),
-                        //     );
-                        //     ui.label("edge_distance");
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetEdgeDistance(
-                        //             "cloud",
-                        //             self.cloud.edge_distance,
-                        //         ));
-                        //     }
-                        // });
+                        ui.horizontal(|ui| {
+                            let resp = ui.add(
+                                egui::widgets::Slider::new(
+                                    &mut self.cloud.edge_distance,
+                                    1.0..=5.0,
+                                )
+                                .drag_value_speed(0.01),
+                            );
+                            ui.label("edge_distance");
+                            if resp.changed() {
+                                self.executor.exec(SceneCommand::SetEdgeDistance(
+                                    "cloud",
+                                    self.cloud.edge_distance,
+                                ));
+                            }
+                        });
                         ui.horizontal(|ui| {
                             let resp = ui.add(
                                 egui::widgets::Slider::new(
@@ -708,11 +708,11 @@ impl App {
             .with_map_size(glam::IVec3::ZERO)
             .with_shape_offset(Vec3::ZERO)
             .with_detail_offset(Vec3::ZERO)
-            .with_bounding_box((Vec3::new(-4.5, 1., -4.5), Vec3::new(4.5, 1.8, 4.5)))
+            .with_bounding_box((Vec3::new(-2.5, 1., -2.5), Vec3::new(2.5, 1.8, 2.5)))
             .with_clouds_offset(Vec3::new(0.0, 0.0, 0.0))
-            .with_cloud_scale(220.0)
+            .with_cloud_scale(290.0)
             .with_density_threshold(0.95)
-            .with_density_multiplier(9500.0)
+            .with_density_multiplier(3600.0)
             .with_num_steps(200)
             .with_num_steps_light(20)
             .with_alpha_threshold(5)
@@ -729,44 +729,24 @@ impl App {
             .with_light_absorption_through_cloud(0.50)
             .with_light_absorption_toward_sun(1.8)
             .with_darkness_threshold(0.35)
-            .with_phase_params(Vec4::new(0.0, 0.71, 0.37, 0.99))
+            .with_phase_params(Vec4::new(0.05, 0.48, 0.37, 0.99))
             .with_col_a(Color32::WHITE)
             .with_col_b(Color32::LIGHT_BLUE)
             .with_light_color(Color32::WHITE)
             .with_edge_distance(1.0)
             .with_volume_offset(0.0)
-            .with_height_map_factor(22.0);
+            .with_height_map_factor(2.0);
 
         let mut executor = Facade::default();
+        // executor.exec(SceneCommand::AddObject("grid", Grid::new(10, 1.0).into()));
 
         executor.exec(CameraCommand::SetCamera(Camera::default()));
-        // executor.exec(SceneCommand::AddObject(
-        //     "cloud",
-        //     cloud_params.build().into(),
-        // ));
-        let cloud = [
-            ("1", Component::from(cloud_params
-                .with_num_steps(100)
-                .build())),
-            // ("2", Component::from(cloud_params
-            //     .with_bounding_box((Vec3::new(2.5, 1., -2.5), Vec3::new(-1.0, 2.3, 0.0)))
-            //     .with_num_steps(100)
-            //     .build())),
-            // ("3", Component::from(cloud_params
-            //     .with_bounding_box((Vec3::new(-2.5, 1., 2.5), Vec3::new(0.0, 2.3, -1.0)))
-            //     .with_num_steps(100)
-            //     .build())),
-            // ("4", Component::from(cloud_params
-            //     .with_bounding_box((Vec3::new(2.5, 1., 2.5), Vec3::new(-1.0, 2.3, -1.0)))
-            //     .with_num_steps(100)
-            //     .build())),
-        ];
         executor.exec(SceneCommand::AddObject(
             "cloud",
-            Component::composite_from(cloud)
+            cloud_params.build().into(),
         ));
         executor.exec(SceneCommand::AddObject("sun", Sun::new(10.0, -135.0).into()));
-        executor.exec(SceneCommand::AddObject("grid", Grid::new(10, 1.0).into()));
+
         Self {
             executor,
             noise_mode: Default::default(),

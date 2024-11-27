@@ -318,83 +318,56 @@ impl Cloud {
 
         let uvw = ray_pos * self.cloud_scale * 0.001 + self.offset * OFFSET_SPEED;
         let shape = self.noise.sample_level(uvw);
-        // let base_shape_density = 0.0_f32.max(shape.x -self.darkness_threshold) * self.density_multiplier;
 
         let bb = self.bounding_box();
-        let size = self.bounding_box().size();
-        // let bounds_centre = (self.bounding_box().min+self.bounding_box().max) * 0.5;
-        // let uvw = (size * 0.5 + ray_pos) * BASE_SCALE * self.cloud_scale;
-        // let offset = Vec3::new(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs_f32() as f32,0.0,0.0);
-        // let a =  ;
-        // let shape_sample_pos = uvw + self.shape_offset * OFFSET_SPEED + self.offset * OFFSET_SPEED /* * time thingy here */;
-        const CONTAINER_EDGE_FADE_DST: f32 = 50.0;
-        // println!("{}", ray_pos.x - bb.min.x);
-        let dst_from_edge_x =
-            CONTAINER_EDGE_FADE_DST.min((ray_pos.x - bb.min.x).min(bb.max.x - ray_pos.x));
-        let dst_from_edge_z =
-            CONTAINER_EDGE_FADE_DST.min((ray_pos.z - bb.min.z).min(bb.max.z - ray_pos.z));
-        let edge_weight = dst_from_edge_z.min(dst_from_edge_x) / CONTAINER_EDGE_FADE_DST;
-        //
-        let g_min = 0.2;
-        let g_max = 0.7;
+        let size = bb.size();
+        let container_edge_fade_dst = self.edge_distance;
+
+        let dst_from_edge_x = (ray_pos.x - bb.min.x).min(bb.max.x - ray_pos.x).min(container_edge_fade_dst);
+        let dst_from_edge_z = (ray_pos.z - bb.min.z).min(bb.max.z - ray_pos.z).min(container_edge_fade_dst);
+        let edge_weight = (dst_from_edge_x.min(dst_from_edge_z)) / container_edge_fade_dst;
+
         let height_percent = (ray_pos.y - bb.min.y) / size.y;
-        let height_gradient = clamp(remap(height_percent, 0.0, g_min, 0.0, 1.0), 0.0, 1.0)
-            * clamp(remap(height_percent, 1.0, g_max, 0.0, 1.0), 0.0, 1.0);
-        let height_gradient = height_gradient * edge_weight;
-        //
-        // let shape_noise = self.noise.sample_level(shape_sample_pos);
-        let normalized_shape_weights =
-            self.shape_noise_weights / self.shape_noise_weights.dot(Vec4::ONE);
-        let shape_fbm =
-            shape.dot(normalized_shape_weights) * height_gradient * self.height_map_factor;
-        let shape_fbm = shape_fbm.clamp(0.0, 1.0);
+        let height_gradient = clamp(remap(height_percent, 0.0, 0.3, 0.0, 1.0), 0.0, 1.0)
+            * clamp(remap(height_percent, 1.0, 0.7, 0.0, 1.0), 0.0, 1.0);
+        let height_gradient = height_gradient * edge_weight * self.height_map_factor;
+
+        let normalized_shape_weights = self.shape_noise_weights / self.shape_noise_weights.dot(Vec4::ONE);
+        let shape_fbm = shape.dot(normalized_shape_weights) * height_gradient;
+
         let base_shape_density = shape_fbm + self.density_offset * 0.1;
 
-        if base_shape_density > self.density_threshold {
-            let detail_sample_pos =
-                uvw * self.detail_noise_scale + self.detail_offset * OFFSET_SPEED;
-            let detail_noise =
-                self.detail_noise.sample_level(detail_sample_pos) * self.edge_distance;
+        if base_shape_density > 0.0 {
+            let detail_sample_pos = uvw * self.detail_noise_scale + self.detail_offset * OFFSET_SPEED + self.offset * OFFSET_SPEED;
+            let detail_noise = self.detail_noise.sample_level(detail_sample_pos);
 
-            let normalized_detail_weights =
-                self.detail_weights / self.detail_weights.dot(Vec4::ONE);
+            let normalized_detail_weights = self.detail_weights / self.detail_weights.dot(Vec4::ONE);
             let detail_fbm = detail_noise.dot(normalized_detail_weights);
-            // println!("{detail_fbm}");
-            // let detail_fbm = detail_fbm.clamp(0.0, 1.0);
 
-            // Subtract detail noise from base shape (weighted by inverse density for edge erosion)
-            // println!("{shape_fbm}:{:?}", shape.x);
             let one_minus_shape = 1.0 - shape_fbm;
-            let detail_erode_weight = one_minus_shape.pow(1.2);
-            // println!("{base_shape_density}");
-            if detail_fbm > 0.3 {
-                let cloud_density = base_shape_density
-                    - (1.0 - detail_fbm) * detail_erode_weight * self.detail_noise_weight;
+            let detail_erode_weight = one_minus_shape.powf(3.0);
+            let cloud_density = base_shape_density - (1.0 - detail_fbm) * detail_erode_weight * self.detail_noise_weight;
 
-                cloud_density * self.density_multiplier * 0.1
-            } else {
-                -1.0
-            }
-            
-            
-        } else {
-            0.0
+            return cloud_density * self.density_multiplier * 0.1;
         }
+
+        0.0
     }
 
+
     pub fn light_march(&self, mut p: Vec3, world_space_light_pos0: Vec3) -> f32 {
-        let dir_to_light = (world_space_light_pos0 - p).normalize();
+        let dir_to_light = (world_space_light_pos0);
         let dst_inside_box = self.bounding_box().dst(p, dir_to_light).y;
-        // println!("{dst_inside_box}");
         let step_size = dst_inside_box / self.num_steps_light as f32;
-        // println!("{step_size}");
-        p += dir_to_light * step_size * 0.5;
+        p += dir_to_light * step_size * 0.5; 
+
         let mut total_density = 0.0;
+        let step_size_f32 = step_size;
 
         for _ in 0..self.num_steps_light {
             let density = self.sample_density(p);
-            total_density += 0.0_f32.max(density * step_size);
-            p += dir_to_light * step_size;
+            total_density += density.max(0.0) * step_size_f32;
+            p += dir_to_light * step_size_f32;
         }
 
         let transmittance = beer(total_density * self.light_absorption_toward_sun);
