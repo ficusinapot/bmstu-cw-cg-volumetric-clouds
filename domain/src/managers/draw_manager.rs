@@ -29,15 +29,14 @@ impl DrawManager {
     }
 
     pub fn draw_scene(&self, scene: &Scene, camera: &Camera, sun: &Sun) {
-        if self.canvas.is_none() {
-            return;
+        if let Some(canvas) = &self.canvas {
+            let visitor = DrawVisitor::new(canvas, camera)
+                .with_sun(sun)
+                .with_color(self.color)
+                .with_stroke(self.stroke);
+
+            scene.accept(&visitor);
         }
-        let canvas = self.canvas.as_ref().expect("");
-        let visitor = DrawVisitor::new(canvas, camera)
-            .with_sun(sun)
-            .with_color(self.color)
-            .with_stroke(self.stroke);
-        scene.accept(&visitor);
     }
 }
 

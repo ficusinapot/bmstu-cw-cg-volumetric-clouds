@@ -252,7 +252,8 @@ impl Painter3D {
         let Some(radius) = self.transform(radius, mvp) else {
             return;
         };
-        self.painter_2d.circle_filled(center, (radius - center).length(), fill_color);
+        self.painter_2d
+            .circle_filled(center, (radius - center).length(), fill_color);
     }
     //
     // fn circle(&self, center: Vec3, radius: f32, stroke: impl Into<Stroke>) {

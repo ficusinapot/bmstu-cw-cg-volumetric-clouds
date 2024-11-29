@@ -1,6 +1,5 @@
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 
-use cgmath::num_traits::Euclid;
 use glam::{IVec3, UVec3, Vec3, Vec4};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
@@ -39,7 +38,7 @@ const OFFSETS: [IVec3; 27] = [
     IVec3::new(1, -1, 0),
 ];
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, PartialEq)]
 struct RWTexture3D<T> {
     data: Vec<T>,
     x: usize,
@@ -76,7 +75,7 @@ impl<T> IndexMut<UVec3> for RWTexture3D<T> {
     }
 }
 
-#[derive(Default, Clone, Copy, Debug)]
+#[derive(Default, Clone, Copy, Debug, PartialEq)]
 pub struct WorleyBuilder {
     pub seed: u64,
     pub num_points_a: usize,
@@ -144,7 +143,7 @@ impl WorleyBuilder {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq, Clone)]
 pub struct Worley {
     points_a: Vec<Vec3>,
     points_b: Vec<Vec3>,
@@ -298,41 +297,89 @@ impl Worley {
     }
 }
 
-// todo
+// // todo
+// #[derive(Default, Clone, Copy, Debug)]
+// pub struct BlueNoiseBuilder {
+//     pub seed: u64,
+//     pub minimum_distance: usize,
+//     pub num_samples: usize,
+// }
+//
+// impl BlueNoiseBuilder {
+//     pub(crate) fn build(self) -> BlueNoise {
+//         BlueNoise::build(self)
+//     }
+// }
+//
+// #[derive(Default, Debug)]
+// pub struct BlueNoise {
+//     texture3d: RWTexture3D<Vec4>,
+//     pub builder: BlueNoiseBuilder,
+// }
+//
+// impl Deref for BlueNoise {
+//     type Target = BlueNoiseBuilder;
+//     fn deref(&self) -> &Self::Target {
+//         &self.builder
+//     }
+// }
+//
+// impl DerefMut for BlueNoise {
+//     fn deref_mut(&mut self) -> &mut Self::Target {
+//         &mut self.builder
+//     }
+// }
+//
+// impl BlueNoise {
+//     pub fn build(blue_noise_builder: BlueNoiseBuilder) -> Self {
+//         let _rng = StdRng::seed_from_u64(blue_noise_builder.seed);
+//
+//         todo!()
+//     }
+//     fn generate_noise(&mut self) {
+//         todo!()
+//     }
+//
+//     pub fn sample_level(&self, vec3: Vec3) -> Vec4 {
+//         self.texture3d.sample_level(vec3, 0)
+//     }
+// }
+
+#[allow(unused)]
 #[derive(Default, Clone, Copy, Debug)]
-pub struct BlueNoiseBuilder {
+pub struct PerlinNoiseBuilder {
     pub seed: u64,
     pub minimum_distance: usize,
     pub num_samples: usize,
 }
 
-impl BlueNoiseBuilder {
-    pub(crate) fn build(self) -> BlueNoise {
-        BlueNoise::build(self)
+impl PerlinNoiseBuilder {
+    pub(crate) fn build(self) -> PerlinNoise {
+        PerlinNoise::build(self)
     }
 }
 
 #[derive(Default, Debug)]
-pub struct BlueNoise {
+pub struct PerlinNoise {
     texture3d: RWTexture3D<Vec4>,
-    pub builder: BlueNoiseBuilder,
+    pub builder: PerlinNoiseBuilder,
 }
 
-impl Deref for BlueNoise {
-    type Target = BlueNoiseBuilder;
+impl Deref for PerlinNoise {
+    type Target = PerlinNoiseBuilder;
     fn deref(&self) -> &Self::Target {
         &self.builder
     }
 }
 
-impl DerefMut for BlueNoise {
+impl DerefMut for PerlinNoise {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.builder
     }
 }
 
-impl BlueNoise {
-    pub fn build(blue_noise_builder: BlueNoiseBuilder) -> Self {
+impl PerlinNoise {
+    pub fn build(blue_noise_builder: PerlinNoiseBuilder) -> Self {
         let _rng = StdRng::seed_from_u64(blue_noise_builder.seed);
 
         todo!()

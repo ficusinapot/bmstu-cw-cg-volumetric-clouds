@@ -1,28 +1,18 @@
 use std::fmt::{Debug, Formatter};
-use cgmath::num_traits::real::Real;
-use cgmath::num_traits::{clamp, Pow};
-use egui::Color32;
-use glam::{FloatExt, IVec3, Vec3, Vec4, Vec4Swizzles};
 use std::ops::{Deref, DerefMut};
-use std::time::{Instant, SystemTime};
+
+use egui::Color32;
+use glam::{FloatExt, IVec3, Vec3, Vec4};
 use log::info;
-use crate::object::objects::texture3d::{Worley, WorleyBuilder};
-use crate::object::objects::BoundingBox;
+
 use crate::visitor::{Visitable, Visitor};
+
+use super::textures::{Worley, WorleyBuilder};
+use super::BoundingBox;
 
 #[inline]
 pub fn remap(v: f32, min_old: f32, max_old: f32, min_new: f32, max_new: f32) -> f32 {
     min_new + (v - min_old) * (max_new - min_new) / (max_old - min_old)
-}
-
-#[inline]
-pub fn square_uv(uv: (f32, f32), screen_params: (f32, f32)) -> (f32, f32) {
-    let width = screen_params.0;
-    let height = screen_params.1;
-    let scale = 1000.0;
-    let x = uv.0 * width;
-    let y = uv.1 * height;
-    (x / scale, y / scale)
 }
 
 #[inline]
@@ -32,13 +22,10 @@ pub fn hg(a: f32, g: f32) -> f32 {
 }
 
 #[inline]
-pub fn lerp_color(a: Color32, b: Color32, t: f32) -> Color32 {
-    Color32::from_rgba_unmultiplied(
-        (a.r() as f32).lerp(b.r() as f32, t) as u8,
-        (a.g() as f32).lerp(b.g() as f32, t) as u8,
-        (a.b() as f32).lerp(b.b() as f32, t) as u8,
-        (a.a() as f32).lerp(b.a() as f32, t) as u8,
-    )
+pub fn phase(a: f32, phase_params: Vec4) -> f32 {
+    let blend = 0.5;
+    let hg_blend = hg(a, phase_params.x) * (1.0 - blend) + hg(a, -phase_params.y) * blend;
+    phase_params.y + hg_blend * phase_params.z
 }
 
 #[inline]
@@ -46,12 +33,7 @@ pub fn beer(d: f32) -> f32 {
     (-d).exp()
 }
 
-#[inline]
-fn remap01(v: f32, low: f32, high: f32) -> f32 {
-    (v - low) / (high - low)
-}
-
-#[derive(Default, Copy, Clone, Debug)]
+#[derive(Default, Copy, Clone, Debug, PartialEq)]
 pub struct CloudBuilder {
     pub bounding_box: BoundingBox,
     pub offset: Vec3,
@@ -250,7 +232,7 @@ impl CloudBuilder {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq, Clone)]
 pub struct Cloud {
     noise: Worley,
     detail_noise: Worley,
@@ -288,18 +270,6 @@ impl Cloud {
         }
     }
 
-    #[inline]
-    fn height_map(&self, h: f32) -> f32 {
-        1.0.lerp((1.0 - beer(h)) * beer(4.0 * h), self.height_map_factor)
-    }
-
-    pub fn phase(&self, a: f32) -> f32 {
-        let blend = 0.5;
-        let hg_blend =
-            hg(a, self.phase_params.x) * (1.0 - blend) + hg(a, -self.phase_params.y) * blend;
-        self.phase_params.y + hg_blend * self.phase_params.z
-    }
-
     pub fn regenerate_noise(&mut self, worley_builder: WorleyBuilder) {
         self.noise = Worley::build(worley_builder);
     }
@@ -316,50 +286,58 @@ impl Cloud {
         const BASE_SCALE: f32 = 1.0 / 1000.0;
         const OFFSET_SPEED: f32 = 1.0 / 100.0;
 
-        let uvw = ray_pos * self.cloud_scale * 0.001 + self.offset * OFFSET_SPEED;
+        let uvw = ray_pos * self.cloud_scale * BASE_SCALE + self.offset * OFFSET_SPEED;
         let shape = self.noise.sample_level(uvw);
 
         let bb = self.bounding_box();
         let size = bb.size();
         let container_edge_fade_dst = self.edge_distance;
 
-        let dst_from_edge_x = (ray_pos.x - bb.min.x).min(bb.max.x - ray_pos.x).min(container_edge_fade_dst);
-        let dst_from_edge_z = (ray_pos.z - bb.min.z).min(bb.max.z - ray_pos.z).min(container_edge_fade_dst);
+        let dst_from_edge_x = (ray_pos.x - bb.min.x)
+            .min(bb.max.x - ray_pos.x)
+            .min(container_edge_fade_dst);
+        let dst_from_edge_z = (ray_pos.z - bb.min.z)
+            .min(bb.max.z - ray_pos.z)
+            .min(container_edge_fade_dst);
         let edge_weight = (dst_from_edge_x.min(dst_from_edge_z)) / container_edge_fade_dst;
 
         let height_percent = (ray_pos.y - bb.min.y) / size.y;
-        let height_gradient = clamp(remap(height_percent, 0.0, 0.3, 0.0, 1.0), 0.0, 1.0)
-            * clamp(remap(height_percent, 1.0, 0.7, 0.0, 1.0), 0.0, 1.0);
+        let height_gradient = remap(height_percent, 0.0, 0.3, 0.0, 1.0).clamp(0.0, 1.0)
+            * remap(height_percent, 1.0, 0.7, 0.0, 1.0).clamp(0.0, 1.0);
         let height_gradient = height_gradient * edge_weight * self.height_map_factor;
 
-        let normalized_shape_weights = self.shape_noise_weights / self.shape_noise_weights.dot(Vec4::ONE);
+        let normalized_shape_weights =
+            self.shape_noise_weights / self.shape_noise_weights.dot(Vec4::ONE);
         let shape_fbm = shape.dot(normalized_shape_weights) * height_gradient;
 
         let base_shape_density = shape_fbm + self.density_offset * 0.1;
 
         if base_shape_density > 0.0 {
-            let detail_sample_pos = uvw * self.detail_noise_scale + self.detail_offset * OFFSET_SPEED + self.offset * OFFSET_SPEED;
+            let detail_sample_pos = uvw * self.detail_noise_scale
+                + self.detail_offset * OFFSET_SPEED
+                + self.offset * OFFSET_SPEED;
             let detail_noise = self.detail_noise.sample_level(detail_sample_pos);
 
-            let normalized_detail_weights = self.detail_weights / self.detail_weights.dot(Vec4::ONE);
+            let normalized_detail_weights =
+                self.detail_weights / self.detail_weights.dot(Vec4::ONE);
             let detail_fbm = detail_noise.dot(normalized_detail_weights);
 
             let one_minus_shape = 1.0 - shape_fbm;
             let detail_erode_weight = one_minus_shape.powf(3.0);
-            let cloud_density = base_shape_density - (1.0 - detail_fbm) * detail_erode_weight * self.detail_noise_weight;
+            let cloud_density = base_shape_density
+                - (1.0 - detail_fbm) * detail_erode_weight * self.detail_noise_weight;
 
-            return cloud_density * self.density_multiplier * 0.1;
+            return cloud_density * self.density_multiplier;
         }
 
         0.0
     }
 
-
     pub fn light_march(&self, mut p: Vec3, world_space_light_pos0: Vec3) -> f32 {
-        let dir_to_light = (world_space_light_pos0);
+        let dir_to_light = world_space_light_pos0;
         let dst_inside_box = self.bounding_box().dst(p, dir_to_light).y;
         let step_size = dst_inside_box / self.num_steps_light as f32;
-        p += dir_to_light * step_size * 0.5; 
+        p += dir_to_light * step_size;
 
         let mut total_density = 0.0;
         let step_size_f32 = step_size;

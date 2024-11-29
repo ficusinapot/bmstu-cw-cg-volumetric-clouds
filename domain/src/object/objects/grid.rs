@@ -1,7 +1,7 @@
 use crate::visitor::{Visitable, Visitor};
 pub use glam::Vec3;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Grid {
     pub k: i32,
     pub scale: f32,

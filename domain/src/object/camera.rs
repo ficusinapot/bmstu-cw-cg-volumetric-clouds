@@ -3,7 +3,7 @@ use glam::{Mat4, Vec3, Vec4, Vec4Swizzles};
 use std::f32::consts::FRAC_PI_2;
 
 /// Camera controller and parameters
-#[derive(Default, Copy, Clone, Debug)]
+#[derive(Default, Copy, Clone, Debug, PartialEq)]
 pub struct Camera {
     pub proj: Perspective,
     pub view: ArcBall,
@@ -17,41 +17,7 @@ impl Visitable for Camera {
 }
 
 impl Camera {
-    pub fn get_pixel_screen_position(
-        &self,
-        world_pos: Vec3,
-        width: usize,
-        height: usize,
-    ) -> Option<(usize, usize)> {
-        let view_matrix = self.view();
-        let proj_matrix = self.projection(width as f32, height as f32);
-
-        let camera_pos = view_matrix.transform_point3(world_pos);
-        let clip_space_pos = proj_matrix * camera_pos.extend(1.0);
-
-        if clip_space_pos.w == 0.0 {
-            return None;
-        }
-
-        let ndc_pos = clip_space_pos.xyz() / clip_space_pos.w;
-
-        let pixel_x = ((ndc_pos.x + 1.0) * 0.5 * width as f32) as isize;
-        let pixel_y = ((1.0 - ndc_pos.y) * 0.5 * height as f32) as isize;
-
-        if pixel_x >= 0 && pixel_x < width as isize && pixel_y >= 0 && pixel_y < height as isize {
-            Some((pixel_x as usize, pixel_y as usize))
-        } else {
-            None
-        }
-    }
-
-    pub fn get_pixel_world_position(
-        &self,
-        i: usize,
-        j: usize,
-        width: usize,
-        height: usize,
-    ) -> Vec3 {
+    pub fn pixel_to_world(&self, i: usize, j: usize, width: usize, height: usize) -> Vec3 {
         let aspect_ratio = width as f32 / height as f32;
         let fov_adjustment = (self.proj.fov / 2.0).tan();
 
@@ -109,7 +75,7 @@ impl Camera {
 }
 
 /// Perspective projection parameters
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Perspective {
     pub fov: f32,
     pub clip_near: f32,
@@ -117,7 +83,7 @@ pub struct Perspective {
 }
 
 /// Arcball camera parameters
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct ArcBall {
     pub pivot: Vec3,
     pub distance: f32,
@@ -126,7 +92,7 @@ pub struct ArcBall {
 }
 
 /// Arcball camera controller parameters
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct ArcBallController {
     pub pan_sensitivity: f32,
     pub swivel_sensitivity: f32,
@@ -226,11 +192,47 @@ impl Default for ArcBallController {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_camera_direction() {
-        let camera = Camera::default();
-        let dir = camera.get_direction();
-        assert_eq!(dir, Vec3::new(-0.99503726, 0.099503726, 0.0));
-        assert_eq!(dir.length(), 1.0);
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_camera_direction() {
+            let mut camera = Camera::default();
+            camera.pivot(1.0, 1.0);
+            camera.zoom(1.0);
+            camera.pan(1.0, 1.0);
+
+            let dir = camera.get_direction();
+            assert_eq!(dir, Vec3::new(-0.9989181, 0.046371836, -0.0034961652));
+            assert_eq!(dir.length(), 1.0);
+        }
+
+        #[test]
+        fn test_camera_position() {
+            let mut camera = Camera::default();
+            camera.pivot(1.0, 1.0);
+            camera.zoom(1.0);
+            camera.pan(1.0, 1.0);
+            let position = camera.get_position();
+            assert_eq!(position, Vec3::new(10.015749, 0.05007979, 0.050079163));
+        }
+
+        #[test]
+        fn test_pixel_to_world() {
+            let mut camera = Camera::default();
+            camera.pivot(1.0, 1.0);
+            camera.zoom(1.0);
+            camera.pan(1.0, 1.0);
+            let width = 1920;
+            let height = 1080;
+            let pixel_x = 960;
+            let pixel_y = 540;
+
+            let world_position = camera.pixel_to_world(pixel_x, pixel_y, width, height);
+
+            let expected_position = Vec3::new(9.007933, -0.25131124, 0.36796498);
+            assert_eq!(world_position, expected_position);
+        }
     }
 }

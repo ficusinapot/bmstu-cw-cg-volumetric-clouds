@@ -1,3 +1,5 @@
+extern crate core;
+
 pub mod canvas;
 pub mod facade;
 pub mod managers;

@@ -3,8 +3,8 @@ use log::debug;
 
 use crate::facade::Command;
 use crate::managers::ManagerSolution;
+use crate::object::objects::textures::WorleyBuilder;
 use crate::object::Component;
-use crate::object::objects::texture3d::WorleyBuilder;
 
 pub enum SceneCommand {
     AddObject(&'static str, Component),
@@ -362,7 +362,6 @@ impl Command for SceneCommand {
                     manager.get_mut_scene_manager().get_mut_object(id)
                 {
                     sun.set_d(d);
-                    debug!("sun pos {:?}", sun.get_pos());
                 }
             }
             SceneCommand::SetSunAngle(id, a) => {
@@ -370,7 +369,6 @@ impl Command for SceneCommand {
                     manager.get_mut_scene_manager().get_mut_object(id)
                 {
                     sun.prepend_angle(a);
-                    debug!("sun pos {:?}", sun.get_pos());
                 }
             }
         }

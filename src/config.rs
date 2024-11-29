@@ -2,7 +2,9 @@ use log::debug;
 
 #[allow(clippy::pedantic)]
 
-pub(crate) fn init_logger() -> Result<(), log::SetLoggerError> {
+
+
+pub fn init_logger() -> Result<(), log::SetLoggerError> {
     if std::env::var_os("RUST_LOG").is_none() {
         env_logger::builder()
             .filter(None, log::LevelFilter::Info)

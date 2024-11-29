@@ -7,7 +7,7 @@ pub use camera_command::CameraCommand;
 pub use draw_command::DrawCommand;
 pub use scene_command::SceneCommand;
 
-pub trait Command: Sized {
+pub trait Command: Sized + Send + Sync {
     type ReturnType;
     fn exec(self, manager: &mut ManagerSolution);
 }

@@ -3,13 +3,12 @@ use crate::visitor::{Visitable, Visitor};
 use std::collections::BTreeMap as Map;
 use std::ops::{Deref, DerefMut};
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq, Clone)]
 pub struct SceneObjects {
     pub objects: Map<&'static str, Component>,
 }
 
 impl SceneObjects {
-    
     pub fn add_object(&mut self, name: &'static str, object: impl Into<Component>) {
         self.objects.insert(name, object.into());
     }
