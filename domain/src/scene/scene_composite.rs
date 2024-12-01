@@ -27,7 +27,7 @@ impl SceneObjects {
 }
 
 impl Visitable for SceneObjects {
-    fn accept(&self, visitor: &impl Visitor) {
+    fn accept(&self, visitor: &mut impl Visitor) {
         for i in self.objects.values() {
             i.accept(visitor);
         }

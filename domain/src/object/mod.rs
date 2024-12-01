@@ -61,7 +61,7 @@ impl From<Terrain> for Component {
 }
 
 impl Visitable for Component {
-    fn accept(&self, visitor: &impl Visitor) {
+    fn accept(&self, visitor: &mut impl Visitor) {
         match self {
             Component::Camera(camera) => camera.accept(visitor),
             Component::Composite(composite) => composite.accept(visitor),

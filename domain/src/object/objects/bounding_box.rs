@@ -1,3 +1,4 @@
+use egui::Pos2;
 use crate::visitor::{Visitable, Visitor};
 use glam::Vec3;
 
@@ -94,7 +95,7 @@ impl BoundingBox {
 
 impl Visitable for BoundingBox {
     #[inline]
-    fn accept(&self, visitor: &impl Visitor) {
+    fn accept(&self, visitor: &mut impl Visitor) {
         visitor.visit_bounding_box(self)
     }
 }

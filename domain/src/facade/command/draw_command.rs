@@ -25,11 +25,9 @@ impl Command for DrawCommand {
                 let draw = manager.get_draw_manager();
                 let camera = manager.get_camera_manager().get_camera();
                 let scene = manager.get_scene_manager().get_scene();
-
-                let sun = manager.get_scene_manager().get_scene().get_object("sun");
-                if let Some(Component::Sun(sun)) = sun {
-                    draw.draw_scene(scene, camera, sun)
-                }
+                
+                draw.draw_scene(scene, camera)
+                
             }
         }
     }

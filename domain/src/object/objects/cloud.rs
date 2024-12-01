@@ -354,7 +354,7 @@ impl Cloud {
 }
 
 impl Visitable for Cloud {
-    fn accept(&self, visitor: &impl Visitor) {
+    fn accept(&self, visitor: &mut impl Visitor) {
         visitor.visit_cloud(self);
     }
 }

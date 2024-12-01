@@ -11,7 +11,7 @@ pub struct Camera {
 }
 
 impl Visitable for Camera {
-    fn accept(&self, _visitor: &impl Visitor) {
+    fn accept(&self, _visitor: &mut impl Visitor) {
         todo!()
     }
 }

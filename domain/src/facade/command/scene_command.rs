@@ -6,6 +6,21 @@ use crate::managers::ManagerSolution;
 use crate::object::objects::textures::WorleyBuilder;
 use crate::object::Component;
 
+pub enum SceneCommandReturn {
+    Nothing,
+    SunPos(glam::Vec3),
+}
+
+impl SceneCommandReturn {
+    #[inline]
+    pub fn as_sun_pos(&self) -> Option<glam::Vec3> {
+        if let Self::SunPos(vec) = *self {
+            return Some(vec);
+        }
+        None
+    }
+}
+
 pub enum SceneCommand {
     AddObject(&'static str, Component),
     GetObject(Component),
@@ -45,11 +60,16 @@ pub enum SceneCommand {
 
     SetSunDistance(&'static str, f32),
     SetSunAngle(&'static str, f32),
+    GetSunPos(&'static str),
+
+    SetTerrainScale(&'static str, usize),
+    SetTerrainNoise(&'static str, WorleyBuilder),
+    SetTerrainNoiseWeight(&'static str, glam::Vec4),
 }
 
 impl Command for SceneCommand {
-    type ReturnType = ();
-    fn exec(self, manager: &mut ManagerSolution) {
+    type ReturnType = SceneCommandReturn;
+    fn exec(self, manager: &mut ManagerSolution) -> Self::ReturnType {
         match self {
             SceneCommand::AddObject(name, component) => {
                 let sm = manager.get_mut_scene_manager();
@@ -371,6 +391,39 @@ impl Command for SceneCommand {
                     sun.prepend_angle(a);
                 }
             }
+            SceneCommand::GetSunPos(id) => {
+                if let Some(Component::Sun(sun)) =
+                    manager.get_mut_scene_manager().get_mut_object(id)
+                {
+                    let sun_pos = sun.get_pos();
+                    return SceneCommandReturn::SunPos(sun_pos)
+                }
+            }
+            SceneCommand::SetTerrainScale(id, s) => {
+                if let Some(Component::Terrain(terrain)) =
+                    manager.get_mut_scene_manager().get_mut_object(id)
+                {
+                    terrain.scale = s;
+                    terrain.generate_grid();
+                }
+            }
+
+            SceneCommand::SetTerrainNoiseWeight(id, w) => {
+                if let Some(Component::Terrain(terrain)) =
+                    manager.get_mut_scene_manager().get_mut_object(id)
+                {
+                    terrain.noise_weight = w;
+                }
+            }
+
+            SceneCommand::SetTerrainNoise(id, w) => {
+                if let Some(Component::Terrain(terrain)) =
+                    manager.get_mut_scene_manager().get_mut_object(id)
+                {
+                    terrain.regenerate_noise(w);
+                }
+            }
         }
+        SceneCommandReturn::Nothing
     }
 }

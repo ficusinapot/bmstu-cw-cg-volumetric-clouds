@@ -14,7 +14,7 @@ impl Grid {
 }
 
 impl Visitable for Grid {
-    fn accept(&self, visitor: &impl Visitor) {
+    fn accept(&self, visitor: &mut impl Visitor) {
         visitor.visit_grid(self);
     }
 }

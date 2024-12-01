@@ -9,5 +9,5 @@ pub use scene_command::SceneCommand;
 
 pub trait Command: Sized + Send + Sync {
     type ReturnType;
-    fn exec(self, manager: &mut ManagerSolution);
+    fn exec(self, manager: &mut ManagerSolution) -> Self::ReturnType;
 }

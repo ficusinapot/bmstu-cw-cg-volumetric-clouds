@@ -28,7 +28,7 @@ impl Scene {
 }
 
 impl Visitable for Scene {
-    fn accept(&self, visitor: &impl Visitor) {
+    fn accept(&self, visitor: &mut impl Visitor) {
         visitor.visit_composite(&self.objects);
     }
 }

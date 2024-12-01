@@ -49,7 +49,7 @@ impl Sun {
 }
 
 impl Visitable for Sun {
-    fn accept(&self, visitor: &impl Visitor) {
+    fn accept(&self, visitor: &mut impl Visitor) {
         visitor.visit_sun(self);
     }
 }

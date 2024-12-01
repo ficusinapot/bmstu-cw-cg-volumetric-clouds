@@ -231,7 +231,15 @@ impl Painter3D {
             return;
         };
 
-        let mut mesh = egui::Mesh::default();
+        let mut mesh = egui::Mesh::with_texture(TextureId::default());
+        
+        
+        
+        // mesh.vertices.push(egui::epaint::Vertex {
+        //     pos: a,
+        //     uv: Default::default(),
+        //     color: Default::default(),
+        // });
         mesh.colored_vertex(a, color32);
         mesh.colored_vertex(b, color32);
         mesh.colored_vertex(c, color32);
