@@ -30,21 +30,10 @@ impl DrawManager {
 
     pub fn draw_scene(&self, scene: &Scene, camera: &Camera) {
         if let Some(canvas) = &self.canvas {
-            let mut img = egui::ColorImage::new([1056, 900], self.color);
-            let mut visitor = DrawVisitor::new(&mut img, camera, canvas)
-                .with_color(self.color)
+            let mut visitor = DrawVisitor::new(camera, canvas)
                 .with_stroke(self.stroke);
 
             scene.accept(&mut visitor);
-            // let handle = canvas.ctx()
-            //     .load_texture("worley_texture", img, Default::default());
-            // let textureid = TextureId::from(&handle);
-            // canvas.image(
-            //     textureid,
-            //     egui::Rect::from_two_pos((0.0, 0.0).into(), (1056.0, 900.0).into()),
-            //     egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-            //     Color32::WHITE,
-            // );
         }
 
        

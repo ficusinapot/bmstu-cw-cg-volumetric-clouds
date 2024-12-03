@@ -1,3 +1,4 @@
+use glam::Vec3;
 use objects::cloud::Cloud;
 
 use crate::object::camera::Camera;
@@ -27,6 +28,29 @@ impl Component {
             so.add_object(name, obj.into());
         }
         Component::Composite(so)
+    }
+    
+    pub fn pos(&self) -> glam::Vec3 {
+        match self {
+            Component::Camera(x) => {
+                x.pos()
+            }
+            Component::Composite(_) => {
+                Vec3::ZERO
+            }
+            Component::Cloud(x) => {
+                x.bounding_box.center()
+            }
+            Component::Sun(x) => {
+                x.get_pos()
+            }
+            Component::Grid(_) => {
+                Vec3::ZERO
+            }
+            Component::Terrain(x) => {
+                x.bounding_box.center()
+            }
+        }
     }
 }
 

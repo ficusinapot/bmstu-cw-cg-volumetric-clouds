@@ -6,8 +6,8 @@ use crate::visitor::{Visitable, Visitor};
 #[derive(Debug, Default, Copy, Clone, PartialEq)]
 pub struct Sun {
     pos: Vec4,
-    a: f32,
-    d: f32,
+    pub a: f32,
+    pub d: f32,
 }
 
 impl Sun {

@@ -74,6 +74,22 @@ impl TriangleMesh {
     pub fn append(&self, v0: Vec3, v1: Vec3, v2: Vec3) -> Self {
         Self(v0 + self.0, v1 + self.1, v2 + self.2)
     }
+
+    pub fn contains(&self, point: Vec3) -> bool {
+        let (v0, v1, v2) = (self.0, self.1, self.2);
+        
+        let edge0 = v1 - v0;
+        let edge1 = v2 - v1;
+        let edge2 = v0 - v2;
+        
+        let c0 = (point - v0).cross(edge0);
+        let c1 = (point - v1).cross(edge1);
+        let c2 = (point - v2).cross(edge2);
+        
+        let has_same_sign = |a: &Vec3, b: &Vec3| a.dot(*b) >= 0.0;
+
+        has_same_sign(&c0, &c1) && has_same_sign(&c1, &c2) && has_same_sign(&c2, &c0)
+    }
 }
 
 #[derive(Debug, Default, PartialEq, Clone)]

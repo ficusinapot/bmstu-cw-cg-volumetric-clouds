@@ -1,3 +1,4 @@
+use domain::object::objects::Grid;
 use eframe::egui;
 use eframe::egui::Color32;
 
@@ -11,17 +12,6 @@ use domain::object::objects::cloud::CloudBuilder;
 use domain::object::objects::Sun;
 use domain::object::objects::terrain::TerrainBuilder;
 use domain::object::objects::textures::WorleyBuilder;
-
-const A_RAYLEIGH: f32 = 0.0025;  // Коэффициент рассеяния Рэлея (синий)
-const A_MIE: f32 = 0.003;        // Коэффициент рассеяния Миделя (красный)
-
-fn rayleigh_scattering(theta: f32) -> f32 {
-    A_RAYLEIGH * (1.0 + (theta * theta)) 
-}
-
-fn mie_scattering(theta: f32) -> f32 {
-    A_MIE * (1.0 + (theta * theta))
-}
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -58,25 +48,6 @@ impl App {
     fn painter(&mut self, ui: &mut egui::Ui) -> (egui::Response, Painter3D) {
         let (response, painter) =
             ui.allocate_painter([1056.0, 900.0].into(), egui::Sense::click_and_drag());
-
-        // let sun_pos = self
-        //     .executor
-        //     .exec(SceneCommand::GetSunPos("sun"))
-        //     .as_sun_pos()
-        //     .unwrap_or_default();
-        // 
-        // let sun_angle = self.sun.1.to_radians();
-        // let theta = sun_angle.sin();
-        // 
-        // let rayleigh = rayleigh_scattering(theta);
-        // let mie = mie_scattering(theta);
-        // 
-        // let red = (1.0 - mie * 0.5).max(0.0); // Интенсивность красного
-        // let green = (1.0 - rayleigh * 0.6).max(0.0) ;; // Интенсивность зеленого
-        // let blue = (1.0 - rayleigh * 0.9).max(0.0) ;; // Интенсивность синего
-        // 
-        // println!("{:?}", (red,green,blue));
-        // self.background_color = Color32::from_rgb(red as u8, green as u8, blue as u8);
 
         let bc = self.background_color;
         painter.rect(
@@ -668,7 +639,7 @@ impl App {
                     ui.vertical(|ui| {
                         ui.horizontal(|ui| {
                             let resp =
-                                ui.add(egui::widgets::Slider::new(&mut self.sun.1, -180.0..=0.0));
+                                ui.add(egui::widgets::Slider::new(&mut self.sun.1, -179.0..=-1.0));
                             ui.label("Угол над горизонтом");
                             if resp.changed() {
                                 self.executor
@@ -683,7 +654,7 @@ impl App {
                     ui.vertical(|ui| {
                         ui.horizontal(|ui| {
                             let resp = ui
-                                .add(egui::widgets::Slider::new(&mut self.terrain.scale, 1..=500));
+                                .add(egui::widgets::Slider::new(&mut self.terrain.scale, 1..=100));
                             ui.label("Масштаб");
                             if resp.changed() {
                                 self.executor.exec(SceneCommand::SetTerrainScale(
@@ -874,7 +845,7 @@ impl App {
 
         let cloud_params = CloudBuilder::default()
             .with_map_size(glam::IVec3::ZERO)
-            .with_bounding_box((Vec3::new(-2.5, 2., -2.5), Vec3::new(2.5, 2.5, 2.5)))
+            .with_bounding_box((Vec3::new(-3.5, 1.9, -3.5), Vec3::new(3.5, 2.5, 3.5)))
             .with_shape_offset(Vec3::ZERO)
             .with_detail_offset(Vec3::ZERO)
             .with_cloud_scale(290.0)
@@ -907,10 +878,10 @@ impl App {
         // executor.exec(SceneCommand::AddObject("grid", Grid::new(10, 1.0).into()));
 
         executor.exec(CameraCommand::SetCamera(Camera::default()));
-        // executor.exec(SceneCommand::AddObject(
-        //     "cloud",
-        //     cloud_params.build().into(),
-        // ));
+        executor.exec(SceneCommand::AddObject(
+            "cloud",
+            cloud_params.build().into(),
+        ));
         executor.exec(SceneCommand::AddObject(
             "sun",
             Sun::new(10.0, -135.0).into(),
@@ -918,7 +889,7 @@ impl App {
 
         let terrain_params = TerrainBuilder::default()
             .with_bounding_box((Vec3::new(-2.5, 0.0, -2.5), Vec3::new(2.5, 0.5, 2.5)))
-            .with_scale(40)
+            .with_scale(60)
             .with_noise_weight(Vec4::new(1.0, 1.0, 0.0, 0.0))
             .with_noise(
                 WorleyBuilder::new()
@@ -944,7 +915,7 @@ impl App {
             terrain: terrain_params,
             background_color: Color32::LIGHT_BLUE,
             offset_speed: 0.3,
-            sun: (10.0, 45.0),
+            sun: (10.0, -135.0),
         }
     }
 }

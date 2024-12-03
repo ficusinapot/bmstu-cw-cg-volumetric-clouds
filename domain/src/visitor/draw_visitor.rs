@@ -1,51 +1,44 @@
 use std::cmp::max;
 use std::collections::HashMap;
-use std::ops::Neg;
+use std::ops::{Deref, Neg, Sub};
 use std::sync::{Arc, Mutex};
 
 use egui::{Color32, ColorImage, Pos2, Stroke, TextureId};
 use egui::ahash::AHashMap;
-use glam::{Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
+use glam::{FloatExt, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
 use log::debug;
 use rand::{random, Rng, thread_rng};
+use rayon::iter::IntoParallelRefMutIterator;
 
 use crate::canvas::painter::Painter3D;
 use crate::math::Transform;
 use crate::object::camera::Camera;
 use crate::object::objects::{BoundingBox, Cloud, Grid, Sun, Terrain};
 use crate::object::objects::cloud::{beer, hg, phase};
-use crate::visitor::Visitor;
+use crate::scene::scene_composite::SceneObjects;
+use crate::visitor::{Visitable, Visitor};
 
 pub struct DrawVisitor<'a> {
-    color_image: &'a mut ColorImage,
     canvas: &'a Painter3D,
     camera: &'a Camera,
     stroke: Stroke,
-    background_color: Color32,
     mvp: Transform,
-    hash_map: HashMap<(usize, usize), usize>,
 }
 
 impl<'a> DrawVisitor<'a> {
-    pub fn new(color_image: &'a mut ColorImage, camera: &'a Camera, canvas: &'a Painter3D) -> Self {
-        let resp_rect = canvas.resp_rect();
+    pub fn new(camera: &'a Camera, canvas: &'a Painter3D) -> Self {
+        let resp_rect = canvas.resp_rect().sub((-8.0).into());
         let proj = camera.projection(resp_rect.width(), resp_rect.height());
         let camera_tf = proj * camera.view();
 
-        Self {
+        let res = Self {
             canvas,
             camera,
-            color_image,
             stroke: Stroke::new(1.0, Color32::GRAY),
-            background_color: Color32::WHITE,
             mvp: Transform::new(camera_tf, resp_rect),
-            hash_map: HashMap::new(),
-        }
-    }
-
-    pub fn with_color(mut self, color32: Color32) -> Self {
-        self.background_color = color32;
-        self
+        };
+        res.visit_sky();
+        res
     }
 
     pub fn with_stroke(mut self, stroke: Stroke) -> Self {
@@ -55,6 +48,19 @@ impl<'a> DrawVisitor<'a> {
 }
 
 impl<'a> Visitor for DrawVisitor<'a> {
+    fn visit_composite(&mut self, scene_objects: &SceneObjects) {
+        let mut objs = scene_objects.values().map(|x| x).collect::<Vec<_>>();
+        objs.sort_by(|x, y| {
+            (y.pos() - self.camera.pos())
+                .length()
+                .partial_cmp(&(x.pos() - self.camera.pos()).length())
+                .unwrap()
+        });
+        for i in objs {
+            i.accept(self);
+        }
+    }
+
     fn visit_camera(&mut self, _camera: &Camera) {
         debug!("Visit camera {:?}", self.camera);
     }
@@ -62,7 +68,7 @@ impl<'a> Visitor for DrawVisitor<'a> {
     fn visit_cloud(&mut self, cloud: &Cloud) {
         self.canvas
             .ctx()
-            .data_mut(|x| x.insert_persisted("cloud".into(), cloud.clone()));
+            .data_mut(|x| x.insert_temp("cloud".into(), cloud.clone()));
         use rayon::prelude::*;
 
         let bb = cloud.bounding_box();
@@ -114,8 +120,7 @@ impl<'a> Visitor for DrawVisitor<'a> {
             .ctx()
             .data_mut(|x| x.get_persisted::<Sun>("sun".into()));
         let sun_pos = sun.map(|x| x.get_pos()).unwrap_or_default();
-        let ray_origin = self.camera.get_position();
-
+        let ray_origin = self.camera.pos();
         img.pixels
             .par_iter_mut()
             .enumerate()
@@ -123,8 +128,7 @@ impl<'a> Visitor for DrawVisitor<'a> {
                 let i = idx / w + min_tuple.y as usize;
                 let j = idx % w + min_tuple.x as usize;
 
-                let ray_dir =
-                    (self.camera.pixel_to_world(i, j, 1056, 900) - ray_origin).normalize();
+                let ray_dir = (self.camera.egui_to_world(i, j, 1056, 900) - ray_origin).normalize();
 
                 let ray_box_info = bb.dst(ray_origin, ray_dir);
                 let dst_to_box = ray_box_info.x;
@@ -332,22 +336,59 @@ impl<'a> Visitor for DrawVisitor<'a> {
             .canvas
             .ctx()
             .data_mut(|x| x.get_persisted::<Sun>("sun".into()));
-        // let cloud = self.canvas.ctx().data_mut(|x| x.get_persisted::<Cloud>("cloud".into())).unwrap();
+
+        if sun.is_none() {
+            return;
+        }
+        let sun_pos = sun.unwrap().get_pos();
+        let cloud = self
+            .canvas
+            .ctx()
+            .data_mut(|x| x.get_persisted::<Cloud>("cloud".into()))
+            .unwrap_or_default();
 
         let (width, height) = (1056.0, 900.0);
         let (min_tuple, max_tuple) = (Pos2::ZERO, Pos2::new(width, height));
         let wh = max_tuple - min_tuple;
         let (w, h) = (wh.x as usize, wh.y as usize);
 
-        let mut img = egui::ColorImage::new([w, h], Color32::TRANSPARENT);
-        let mut z_buffer: HashMap<(usize, usize), f32> = HashMap::new();
+        let mut img = Arc::new(Mutex::new(egui::ColorImage::new(
+            [w, h],
+            Color32::TRANSPARENT,
+        )));
+        let z_buffer = Arc::new(Mutex::new(HashMap::new()));
 
-        for (v, (n0, n1, n2)) in &terrain.triangles {
+        terrain.triangles.par_iter().for_each(|(v, (n0, n1, n2))| {
             let center = v.center();
-            let light = (sun.unwrap().get_pos() - center).normalize();
+            let light = (sun_pos - center).normalize();
+            let img = img.clone();
+            let z_buffer = z_buffer.clone();
+            let get_shadow_factor = |probe: Vec3| -> f32 {
+                let sun_dir = (sun_pos - probe).normalize();
+                let cloud_bb = cloud.bounding_box().dst(probe, sun_dir);
+                let (dir_to_box, dst_inside_box) = cloud_bb.into();
+                if dst_inside_box != 0.0 {
+                    let mut p = probe;
+                    let step_size = dst_inside_box / 10.0;
+                    p += dir_to_box * sun_dir;
+
+                    let mut total_density = 0.0;
+                    let step_size_f32 = step_size;
+
+                    for _ in 0..10 {
+                        let density = cloud.sample_density(p);
+                        total_density += density.max(0.0) * step_size_f32;
+                        p += sun_dir * step_size_f32;
+                    }
+                    (-total_density / 50.0).exp().clamp(0.0, 1.0)
+                } else {
+                    1.0
+                }
+            };
 
             let (v0, v1, v2) = v.to_tuple();
-            let (p1, p2, p3) = (v0, v1, v2);
+            let (mut p0, mut p1, mut p2) = (v0, v1, v2);
+
             let v0 = self.canvas.transform(v0, self.mvp);
             let v1 = self.canvas.transform(v1, self.mvp);
             let v2 = self.canvas.transform(v2, self.mvp);
@@ -363,7 +404,28 @@ impl<'a> Visitor for DrawVisitor<'a> {
                             && x < width as usize
                             && y < height as usize
                         {
-                            let interpolated_normal = interpolate_normal(
+                            let a1 = Vec3::new(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z);
+                            let a2 = Vec3::new(p2.x - p0.x, p2.y - p0.y, p2.z - p0.z);
+                            let normal = a1.cross(a2);
+                            let d = -(normal.x * p0.x + normal.y * p0.y + normal.z * p0.z);
+                            let (a, b, c, d) = (normal.x, normal.y, normal.z, d);
+
+                            let new_u = p1.x + (p0.x - p1.x) * ((x as f32 - v1.x) / (v0.x - v1.x));
+                            let new_v = p1.y + (p0.y - p1.y) * ((y as f32 - v1.y) / (v0.y - v1.y));
+                            let z_pixel = if c != 0.0 {
+                                -(a * new_u + b * new_v + d) / c
+                            } else {
+                                0.0
+                            };
+
+                            let probe = Vec3::new(new_u, new_v, z_pixel);
+                            let depth = self.camera.pos().distance(probe);
+
+                            let x1 = get_shadow_factor(p0);
+                            let x2 = get_shadow_factor(p1);
+                            let x3 = get_shadow_factor(p2);
+
+                            let interpolated_normal = interpolate(
                                 Pos2::new(x as f32, y as f32),
                                 v0,
                                 v1,
@@ -372,43 +434,95 @@ impl<'a> Visitor for DrawVisitor<'a> {
                                 n1.clone(),
                                 n2.clone(),
                             );
-                            let alpha = light.dot(interpolated_normal);
-                            let dif = 0.55 * alpha;
+                            let alpha = light.dot(interpolated_normal.normalize());
+
+                            let beta =
+                                interpolate(Pos2::new(x as f32, y as f32), v0, v1, v2, x1, x2, x3)
+                                    .clamp(0.2, 1.0);
+
+                            let dif = 0.55 * alpha * beta;
                             let col = Vec3::new(0.71, 0.94, 0.73) * dif;
                             let (r, g, b) = (col.x * 255.0, col.y * 255.0, col.z * 255.0);
-                            let color =
-                                Color32::from_rgba_unmultiplied(r as u8, g as u8, b as u8, 255);
-
-                            let v1 = Vec3::new(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z);
-                            let v2 = Vec3::new(p3.x - p1.x, p3.y - p1.y, p3.z - p1.z);
-                            let normal = v1.cross(v2);
-                            let d = -(normal.x * p1.x + normal.y * p1.y + normal.z * p1.z);
-
-                            let (a, b, c, d) = (normal.x, normal.y, normal.z, d);
-
-                            // let z = self
-                            //     .camera
-                            //     .pixel_to_world(x, y, width as usize, height as usize)
-                            //     .z;
-
-                            let z = -(a * x as f32 + b * y as f32 + d) / c;
-
-                            let pixel_index = (x, y);
-                            if let Some(&existing_z) = z_buffer.get(&pixel_index) {
-                                if z <= existing_z {
-                                    z_buffer.insert(pixel_index, z);
-                                    img[(x, y)] = color;
+                            let color = Color32::from_rgb(r as u8, g as u8, b as u8);
+                            let mut z_buffer = z_buffer.lock().unwrap();
+                            if let Some(existing_depth) = z_buffer.get(&(x, y)) {
+                                if depth < *existing_depth {
+                                    img.lock().unwrap()[(x, y)] = color;
+                                    z_buffer.insert((x, y), depth);
                                 }
                             } else {
-                                z_buffer.insert(pixel_index, z);
-                                img[(x, y)] = color;
+                                img.lock().unwrap()[(x, y)] = color;
+                                z_buffer.insert((x, y), depth);
                             }
-                            // println!("{:?}", z_buffer);
+                            drop(z_buffer);
                         }
                     }
                 }
             }
+        });
+
+        let img = Arc::try_unwrap(img)
+            .expect("one strong reference")
+            .into_inner()
+            .expect("No one holding the mutex");
+        let handle = self
+            .canvas
+            .ctx()
+            .load_texture("terrain", img, Default::default());
+        let textureid = TextureId::from(&handle);
+        self.canvas.image(
+            textureid,
+            egui::Rect::from_two_pos(min_tuple, max_tuple),
+            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+    }
+}
+
+impl<'a> DrawVisitor<'a> {
+    fn visit_sky(&self) {
+        use rayon::prelude::*;
+        let (width, height) = (1066.0, 950.0);
+        let (min_tuple, max_tuple) = (Pos2::ZERO, Pos2::new(width, height));
+        let wh = max_tuple - min_tuple;
+        let (w, h) = (wh.x as usize, wh.y as usize);
+
+        let sun = self
+            .canvas
+            .ctx()
+            .data_mut(|x| x.get_persisted::<Sun>("sun".into()));
+        if sun.is_none() {
+            return;
         }
+        let sun = sun.unwrap();
+
+        let mut img = egui::ColorImage::new([w, h], Color32::TRANSPARENT);
+        img.pixels
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(idx, pixel)| {
+                let i = idx / w + min_tuple.y as usize;
+                let j = idx % w + min_tuple.x as usize;
+                let uv = glam::Vec2::new(j as f32, 900.0 - i as f32) / 900.0;
+
+                let atmosphere = (1.0_f32 - uv.y).sqrt();
+                let sky_col = Vec3::new(0.2, 0.4, 0.8);
+
+                let scatter = sun.get_pos().y / sun.d;
+                let scatter = scatter.powf(1.0 / 10.0);
+                let scatter = 1.0 - scatter.clamp(0.2, 0.9);
+
+                let col = Vec3::splat(1.0).lerp(Vec3::new(0.8, 0.3, 0.0) * 1.1, scatter);
+                let col = sky_col.lerp(col, atmosphere / 1.1);
+                let col = col;
+                let (r, g, b) = col.into();
+                *pixel = Color32::from_rgba_unmultiplied(
+                    (r * 255.0) as u8,
+                    (g * 255.0) as u8,
+                    (b * 255.0) as u8,
+                    255,
+                );
+            });
 
         let handle = self
             .canvas
@@ -424,21 +538,25 @@ impl<'a> Visitor for DrawVisitor<'a> {
     }
 }
 
-fn interpolate_normal(
-    pos: Pos2,
-    v0: Pos2,
-    v1: Pos2,
-    v2: Pos2,
-    n0: Vec3,
-    n1: Vec3,
-    n2: Vec3,
-) -> Vec3 {
+fn interpolate<T>(pos: Pos2, v0: Pos2, v1: Pos2, v2: Pos2, n0: T, n1: T, n2: T) -> T
+where
+    T: std::ops::Mul<f32, Output = T> + std::ops::Add<Output = T>,
+{
     let area_total = (v1.x - v0.x) * (v2.y - v0.y) - (v2.x - v0.x) * (v1.y - v0.y);
     let alpha = ((v1.x - pos.x) * (v2.y - pos.y) - (v2.x - pos.x) * (v1.y - pos.y)) / area_total;
     let beta = ((v2.x - pos.x) * (v0.y - pos.y) - (v0.x - pos.x) * (v2.y - pos.y)) / area_total;
     let gamma = 1.0 - alpha - beta;
 
-    (n0 * alpha + n1 * beta + n2 * gamma).normalize()
+    n0 * alpha + n1 * beta + n2 * gamma
+}
+
+fn interpolate_shadow(pos: Pos2, v0: Pos2, v1: Pos2, v2: Pos2, n0: f32, n1: f32, n2: f32) -> f32 {
+    let area_total = (v1.x - v0.x) * (v2.y - v0.y) - (v2.x - v0.x) * (v1.y - v0.y);
+    let alpha = ((v1.x - pos.x) * (v2.y - pos.y) - (v2.x - pos.x) * (v1.y - pos.y)) / area_total;
+    let beta = ((v2.x - pos.x) * (v0.y - pos.y) - (v0.x - pos.x) * (v2.y - pos.y)) / area_total;
+    let gamma = 1.0 - alpha - beta;
+
+    (n0 * alpha + n1 * beta + n2 * gamma)
 }
 
 #[inline]
