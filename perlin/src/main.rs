@@ -1,32 +1,34 @@
-use std::ops::{Deref, DerefMut, Index, IndexMut};
-
 use eframe::egui;
 use egui::{ColorImage, TextureHandle, TextureOptions, Ui};
-use glam::{IVec3, UVec3, Vec3, Vec4};
-use rand::{Rng, SeedableRng};
-use rand::prelude::StdRng;
-use domain::object::objects::texture3d::{Worley, WorleyBuilder};
+use glam::{Vec3, Vec4};
+use domain::object::objects::texture3d::{PerlinBuilder};
+use domain::object::objects::texture3d::{Perlin};
+use svg::Document;
+use svg::node::element::Rectangle;
+use std::fs::File;
+use std::io::Write;
 
 pub struct NoiseVisualizer {
-    worley: Worley,
+    perlin: Perlin,
     slice_y: f32,
     texture: Option<TextureHandle>,
 }
 
 impl NoiseVisualizer {
-    pub fn new(worley: Worley) -> Self {
+    pub fn new(perlin: Perlin) -> Self {
         Self {
-            worley,
+            perlin,
             slice_y: 0.0,
             texture: None,
         }
     }
+
     fn generate_slice_image(&self, resolution: usize) -> ColorImage {
         let mut pixels = Vec::with_capacity(resolution * resolution);
         let resolution = resolution * 2;
         for z in 0..resolution {
             for x in 0..resolution {
-                let sample = self.worley.sample_level(Vec3::new(
+                let sample = self.perlin.sample_level(Vec3::new(
                     x as f32 / resolution as f32,
                     self.slice_y as f32,
                     z as f32 / resolution as f32,
@@ -50,18 +52,48 @@ impl NoiseVisualizer {
             (vec.w.clamp(0.0, 1.0) * 255.0) as u8,
         ]
     }
+
+    pub fn export_to_svg(&self, resolution: usize) {
+        let resolution = resolution;
+        let mut document = Document::new()
+            .set("viewBox", (0, 0, resolution, resolution))
+            .set("xmlns", "http://www.w3.org/2000/svg");
+
+        for z in 0..resolution {
+            for x in 0..resolution {
+                let sample = self.perlin.sample_level(Vec3::new(
+                    x as f32 / resolution as f32,
+                    self.slice_y as f32,
+                    z as f32 / resolution as f32,
+                ));
+                let color = Self::vec4_to_rgba(sample);
+                let rect = Rectangle::new()
+                    .set("x", x)
+                    .set("y", z)
+                    .set("width", 1)
+                    .set("height", 1)
+                    .set("fill", format!("rgb({}, {}, {})", color[0], color[1], color[2]));
+                document = document.add(rect);
+            }
+        }
+
+        let svg_data = document.to_string();
+        let mut file = File::create("perlin.svg").expect("Unable to create file");
+        file.write_all(svg_data.as_bytes()).expect("Unable to write data to file");
+    }
+
     pub fn ui(&mut self, ui: &mut Ui) {
-        ui.label("Worley Noise Visualizer");
+        ui.label("Perlin Noise Visualizer");
 
         ui.horizontal(|ui| {
             let resp = ui.add(egui::Slider::new(&mut self.slice_y, 0.0..=1.0));
             ui.label(format!("Slice Y: {}", self.slice_y));
 
-            let resolution = self.worley.builder.resolution;
+            let resolution = self.perlin.builder.resolution;
             if self.texture.is_none() || resp.changed() {
                 let image = self.generate_slice_image(resolution);
                 self.texture = Some(ui.ctx().load_texture(
-                    "worley_slice",
+                    "perlin_slice",
                     image,
                     TextureOptions::LINEAR,
                 ));
@@ -69,7 +101,7 @@ impl NoiseVisualizer {
         });
 
         ui.collapsing("Noise Settings", |ui| {
-            let params = &mut self.worley.builder;
+            let params = &mut self.perlin.builder;
 
             ui.add(egui::Slider::new(&mut params.resolution, 16..=256).text("Resolution"));
             ui.add(egui::Slider::new(&mut params.num_points_a, 1..=64).text("Num Points A"));
@@ -78,11 +110,14 @@ impl NoiseVisualizer {
             ui.add(egui::Slider::new(&mut params.persistence, 0.0..=1.0).text("Persistence"));
             ui.add(egui::Slider::new(&mut params.tile, 0.1..=10.0).text("Tile"));
             ui.add(egui::Checkbox::new(&mut params.invert_noise, "invert"));
-            ui.color_edit_button_rgba_unmultiplied((&mut params.color_mask).as_mut());
 
             if ui.button("Regenerate Noise").clicked() {
-                self.worley = Worley::build(params.clone());
+                self.perlin = Perlin::build(params.clone());
                 self.texture = None;
+            }
+
+            if ui.button("Export to SVG").clicked() {
+                self.export_to_svg(self.perlin.builder.resolution);
             }
         });
 
@@ -93,7 +128,7 @@ impl NoiseVisualizer {
 }
 
 fn main() {
-    let worley = WorleyBuilder::new()
+    let perlin = PerlinBuilder::default()
         .with_seed(0)
         .with_resolution(128)
         .with_num_points_a(3)
@@ -106,16 +141,16 @@ fn main() {
         .build();
 
     let app = NoiseApp {
-        visualizer: NoiseVisualizer::new(worley),
+        visualizer: NoiseVisualizer::new(perlin),
     };
 
     let options = eframe::NativeOptions::default();
     eframe::run_native(
-        "Worley Noise Visualizer",
+        "Perlin Noise Visualizer",
         options,
         Box::new(|_| Ok(Box::from(app))),
     )
-    .expect("TODO: panic message");
+        .expect("TODO: panic message");
 }
 
 struct NoiseApp {

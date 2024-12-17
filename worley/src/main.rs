@@ -1,11 +1,14 @@
 use std::ops::{Deref, DerefMut, Index, IndexMut};
-
 use eframe::egui;
 use egui::{ColorImage, TextureHandle, TextureOptions, Ui};
 use glam::{IVec3, UVec3, Vec3, Vec4};
 use rand::{Rng, SeedableRng};
 use rand::prelude::StdRng;
 use domain::object::objects::texture3d::{Worley, WorleyBuilder};
+use svg::Document;
+use svg::node::element::{Rectangle, Path};
+use std::fs::File;
+use std::io::Write;
 
 pub struct NoiseVisualizer {
     worley: Worley,
@@ -50,6 +53,36 @@ impl NoiseVisualizer {
             (vec.w.clamp(0.0, 1.0) * 255.0) as u8,
         ]
     }
+
+    pub fn export_to_svg(&self, resolution: usize) {
+        let resolution = resolution;
+        let mut document = Document::new()
+            .set("viewBox", (0, 0, resolution, resolution))
+            .set("xmlns", "http://www.w3.org/2000/svg");
+
+        let mut path_data = String::new();
+
+        for z in 0..resolution {
+            for x in 0..resolution {
+                let sample = self.worley.sample_level(Vec3::new(
+                    x as f32 / resolution as f32,
+                    self.slice_y as f32,
+                    z as f32 / resolution as f32,
+                ));
+                let color = Self::vec4_to_rgba(sample);
+                let rect = Rectangle::new()
+                    .set("x", x)
+                    .set("y", z)
+                    .set("width", 1)
+                    .set("height", 1)
+                    .set("fill", format!("rgb({}, {}, {})", color[0], color[1], color[2]));
+                document = document.add(rect);
+            }
+        }
+
+        svg::save("worley.svg", &document).unwrap()
+    }
+
     pub fn ui(&mut self, ui: &mut Ui) {
         ui.label("Worley Noise Visualizer");
 
@@ -84,6 +117,10 @@ impl NoiseVisualizer {
                 self.worley = Worley::build(params.clone());
                 self.texture = None;
             }
+
+            if ui.button("Export to SVG").clicked() {
+                self.export_to_svg(self.worley.builder.resolution);
+            }
         });
 
         if let Some(texture) = &self.texture {
@@ -115,7 +152,7 @@ fn main() {
         options,
         Box::new(|_| Ok(Box::from(app))),
     )
-    .expect("TODO: panic message");
+        .expect("TODO: panic message");
 }
 
 struct NoiseApp {

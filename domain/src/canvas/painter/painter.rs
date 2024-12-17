@@ -232,9 +232,7 @@ impl Painter3D {
         };
 
         let mut mesh = egui::Mesh::with_texture(TextureId::default());
-        
-        
-        
+
         // mesh.vertices.push(egui::epaint::Vertex {
         //     pos: a,
         //     uv: Default::default(),

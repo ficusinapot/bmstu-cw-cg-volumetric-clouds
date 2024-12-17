@@ -1,5 +1,5 @@
 [package]
-name = "worley"
+name = "perlin"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,3 +11,4 @@ image = "0.25.4"
 eframe = "0.29.1"
 rayon = "1.10.0"
 domain = { path = "../domain" }
+svg = "0.18.0"

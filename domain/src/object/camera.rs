@@ -1,7 +1,7 @@
 use std::f32::consts::FRAC_PI_2;
 
 use egui::{Pos2, Rect, Vec2};
-use glam::{Mat4, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
+use glam::{Mat4, Vec3, Vec4, Vec4Swizzles};
 
 use crate::math::Transform;
 use crate::visitor::{Visitable, Visitor};
@@ -54,50 +54,14 @@ impl Camera {
         self.control.zoom(&mut self.view, delta)
     }
 
-    pub fn egui_to_world(
-        &self,
-        i: usize,
-        j: usize,
-        width: usize,
-        height: usize,
-    ) -> Vec3 {
+    pub fn egui_to_world(&self, i: usize, j: usize, width: usize, height: usize) -> Vec3 {
+        let t = Transform::new(
+            self.projection(width as f32, height as f32) * self.view(),
+            Rect::from_min_size(Pos2::ZERO, (width as f32, height as f32).into()),
+        );
 
-        // let aspect_ratio = width as f32 / height as f32;
-        // let fov_adjustment = (self.proj.fov / 2.0).tan();
-        //
-        // let pixel_ndc_x = (j as f32) / width as f32;
-        // let pixel_ndc_y = (i as f32) / height as f32;
-        //
-        // let pixel_screen_x = 2.0 * pixel_ndc_x - 1.0;
-        // let pixel_screen_y = 1.0 - 2.0 * pixel_ndc_y;
-        //
-        // let pixel_camera_x = pixel_screen_x * aspect_ratio * fov_adjustment;
-        // let pixel_camera_y = pixel_screen_y * fov_adjustment;
-        //
-        // println!("{:?}", (i, j));
-            let t = Transform::new(
-                self.projection(width as f32, height as f32) * self.view(),
-                Rect::from_min_size(Pos2::ZERO, (width as f32, height as f32).into()),
-            );
-
-            t.egui_to_world(Vec2::new(j as f32, i as f32), -1.)
+        t.egui_to_world(Vec2::new(j as f32, i as f32), -1.)
     }
-
-    // pub fn world_to_egui(
-    //     &self,
-    //     i: usize,
-    //     j: usize,
-    //     width: usize,
-    //     height: usize,
-    //     depth: f32,
-    // ) -> Vec3 {
-    //     let t = Transform::new(
-    //         self.projection(width as f32, height as f32) * self.view(),
-    //         Rect::from_min_size(Pos2::ZERO, (width as f32, height as f32).into()),
-    //     );
-    //
-    //     t.world_to_egui(Vec2::new(i as f32, j as f32), depth)
-    // }
 }
 
 /// Perspective projection parameters
@@ -184,9 +148,9 @@ impl Default for ArcBall {
     fn default() -> Self {
         Self {
             pivot: Vec3::new(0.0, 0.5, 0.0),
-            pitch: 0.0,
-            yaw: 0.0,
-            distance: 10.,
+            pitch: 0.4,
+            yaw: 3.7,
+            distance: 15.,
         }
     }
 }
@@ -224,53 +188,65 @@ mod tests {
 
         #[test]
         fn test_camera_trans() {
-            let mut camera = Camera::default();
-            camera.pivot(1.0, 1.0);
-            camera.zoom(1.0);
-            camera.pan(1.0, 1.0);
+            let camera = Camera {
+                proj: Perspective {
+                    fov: 45.0,
+                    clip_near: 0.0,
+                    clip_far: 100.0,
+                },
+                view: ArcBall {
+                    pivot: Vec3::ZERO,
+                    distance: 10.0,
+                    yaw: 0.0,
+                    pitch: 0.0,
+                },
+                control: Default::default(),
+            };
 
             let dir = camera.dir();
-            assert_eq!(dir, Vec3::new(-0.9989181, 0.046371836, -0.0034961652));
+            assert_eq!(dir, Vec3::new(-1.0, 0.0, 0.0));
             assert_eq!(dir.length(), 1.0);
         }
 
         #[test]
         fn test_camera_direction() {
-            let mut camera = Camera::default();
-            camera.pivot(1.0, 1.0);
-            camera.zoom(1.0);
-            camera.pan(1.0, 1.0);
+            let camera = Camera {
+                proj: Perspective {
+                    fov: 45.0,
+                    clip_near: 0.0,
+                    clip_far: 100.0,
+                },
+                view: ArcBall {
+                    pivot: Vec3::ZERO,
+                    distance: 10.0,
+                    yaw: 0.0,
+                    pitch: 0.0,
+                },
+                control: Default::default(),
+            };
 
             let dir = camera.dir();
-            assert_eq!(dir, Vec3::new(-0.9989181, 0.046371836, -0.0034961652));
+            assert_eq!(dir, Vec3::new(-1.0, 0.0, 0.0));
             assert_eq!(dir.length(), 1.0);
         }
 
         #[test]
         fn test_camera_position() {
-            let mut camera = Camera::default();
-            camera.pivot(1.0, 1.0);
-            camera.zoom(1.0);
-            camera.pan(1.0, 1.0);
-            let position = camera.pos();
-            assert_eq!(position, Vec3::new(10.015749, 0.05007979, 0.050079163));
-        }
-
-        #[test]
-        fn test_pixel_to_world() {
-            // let mut camera = Camera::default();
-            // camera.pivot(1.0, 1.0);
-            // camera.zoom(1.0);
-            // camera.pan(1.0, 1.0);
-            // let width = 1920;
-            // let height = 1080;
-            // let pixel_x = 960;
-            // let pixel_y = 540;
-            //
-            // let world_position = camera.pixel_to_world(pixel_x, pixel_y, width, height);
-            //
-            // let expected_position = Vec3::new(9.007933, -0.25131124, 0.36796498);
-            // assert_eq!(world_position, expected_position);
+            let camera = Camera {
+                proj: Perspective {
+                    fov: 45.0,
+                    clip_near: 0.0,
+                    clip_far: 100.0,
+                },
+                view: ArcBall {
+                    pivot: Vec3::ZERO,
+                    distance: 10.0,
+                    yaw: 0.0,
+                    pitch: 0.0,
+                },
+                control: Default::default(),
+            };
+            assert_eq!(camera.pos(), Vec3::new(10.0, 0.0, 0.0));
         }
     }
 }

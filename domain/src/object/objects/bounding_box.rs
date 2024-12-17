@@ -1,4 +1,3 @@
-use egui::Pos2;
 use crate::visitor::{Visitable, Visitor};
 use glam::Vec3;
 
@@ -9,6 +8,14 @@ pub struct BoundingBox {
 
     /// The other corner, opposing [`Self::min`]. Usually the right bottom one.
     pub max: Vec3,
+}
+
+impl BoundingBox {
+    pub fn move_center(&mut self, new_center: Vec3) {
+        let offset = new_center - self.center();
+        self.min += offset;
+        self.max += offset;
+    }
 }
 
 impl From<(Vec3, Vec3)> for BoundingBox {

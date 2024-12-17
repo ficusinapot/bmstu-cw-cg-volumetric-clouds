@@ -1,6 +1,7 @@
 use std::ops::{Deref, DerefMut, Index, IndexMut};
+use std::sync::{Mutex};
 
-use glam::{IVec3, UVec3, Vec3, Vec4};
+use glam::{IVec3, UVec3, Vec2, Vec3, Vec4, Vec4Swizzles};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
 
@@ -230,6 +231,7 @@ impl Worley {
                 drop(min_max_lock);
 
                 *val = *val * (1.0 - params.color_mask) + noise_sum * params.color_mask;
+                assert!(val.x >= 0., "{:?} {:?}", val, noise_sum);
             });
 
         let min_max = Arc::try_unwrap(min_max_lock)
@@ -240,7 +242,10 @@ impl Worley {
             let min_val = min_max[0] as f32 / 10_000_000.0;
             let max_val = min_max[1] as f32 / 10_000_000.0;
             let normalized_val = (*val - min_val) / (max_val - min_val);
+            // println!("{:?}", normalized_val);
             *val = *val * (1.0 - params.color_mask) + normalized_val * params.color_mask;
+            // *val = Vec4::from(*val).clamp(Vec4::ZERO, Vec4::ONE);
+            // assert!(val.x >= 0., "{:?} {:?}", val, min_max);
         });
     }
 
@@ -297,98 +302,223 @@ impl Worley {
     }
 }
 
-// // todo
-// #[derive(Default, Clone, Copy, Debug)]
-// pub struct BlueNoiseBuilder {
-//     pub seed: u64,
-//     pub minimum_distance: usize,
-//     pub num_samples: usize,
-// }
-//
-// impl BlueNoiseBuilder {
-//     pub(crate) fn build(self) -> BlueNoise {
-//         BlueNoise::build(self)
-//     }
-// }
-//
-// #[derive(Default, Debug)]
-// pub struct BlueNoise {
-//     texture3d: RWTexture3D<Vec4>,
-//     pub builder: BlueNoiseBuilder,
-// }
-//
-// impl Deref for BlueNoise {
-//     type Target = BlueNoiseBuilder;
-//     fn deref(&self) -> &Self::Target {
-//         &self.builder
-//     }
-// }
-//
-// impl DerefMut for BlueNoise {
-//     fn deref_mut(&mut self) -> &mut Self::Target {
-//         &mut self.builder
-//     }
-// }
-//
-// impl BlueNoise {
-//     pub fn build(blue_noise_builder: BlueNoiseBuilder) -> Self {
-//         let _rng = StdRng::seed_from_u64(blue_noise_builder.seed);
-//
-//         todo!()
-//     }
-//     fn generate_noise(&mut self) {
-//         todo!()
-//     }
-//
-//     pub fn sample_level(&self, vec3: Vec3) -> Vec4 {
-//         self.texture3d.sample_level(vec3, 0)
-//     }
-// }
+// pub type Perlin = Worley;
+// pub type PerlinBuilder = WorleyBuilder;
 
-#[allow(unused)]
-#[derive(Default, Clone, Copy, Debug)]
-pub struct PerlinNoiseBuilder {
+
+#[derive(Default, Clone, Copy, Debug, PartialEq)]
+pub struct PerlinBuilder {
     pub seed: u64,
-    pub minimum_distance: usize,
-    pub num_samples: usize,
+    pub num_points_a: usize,
+    pub num_points_b: usize,
+    pub num_points_c: usize,
+    pub persistence: f32,
+    pub invert_noise: bool,
+    pub resolution: usize,
+    pub tile: f32,
+    pub color_mask: Vec4,
 }
 
-impl PerlinNoiseBuilder {
-    pub(crate) fn build(self) -> PerlinNoise {
-        PerlinNoise::build(self)
+impl PerlinBuilder {
+    pub fn build(self) -> Perlin {
+        Perlin::build(self)
+    }
+
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = seed;
+        self
+    }
+
+    pub fn with_num_points_a(mut self, num_points_a: usize) -> Self {
+        self.num_points_a = num_points_a;
+        self
+    }
+
+    pub fn with_num_points_b(mut self, num_points_b: usize) -> Self {
+        self.num_points_b = num_points_b;
+        self
+    }
+
+    pub fn with_num_points_c(mut self, num_points_c: usize) -> Self {
+        self.num_points_c = num_points_c;
+        self
+    }
+
+    pub fn with_persistence(mut self, persistence: f32) -> Self {
+        self.persistence = persistence;
+        self
+    }
+
+    pub fn with_invert_noise(mut self, invert_noise: bool) -> Self {
+        self.invert_noise = invert_noise;
+        self
+    }
+
+    pub fn with_resolution(mut self, resolution: usize) -> Self {
+        self.resolution = resolution;
+        self
+    }
+
+    pub fn with_tile(mut self, tile: f32) -> Self {
+        self.tile = tile;
+        self
+    }
+
+    pub fn with_color_mask(mut self, color: Vec4) -> Self {
+        self.color_mask = color;
+        self
     }
 }
 
-#[derive(Default, Debug)]
-pub struct PerlinNoise {
+#[derive(Default, Debug, PartialEq, Clone)]
+pub struct Perlin {
     texture3d: RWTexture3D<Vec4>,
-    pub builder: PerlinNoiseBuilder,
+    pub builder: PerlinBuilder,
 }
 
-impl Deref for PerlinNoise {
-    type Target = PerlinNoiseBuilder;
+impl Deref for Perlin {
+    type Target = PerlinBuilder;
     fn deref(&self) -> &Self::Target {
         &self.builder
     }
 }
 
-impl DerefMut for PerlinNoise {
+impl DerefMut for Perlin {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.builder
     }
 }
 
-impl PerlinNoise {
-    pub fn build(blue_noise_builder: PerlinNoiseBuilder) -> Self {
-        let _rng = StdRng::seed_from_u64(blue_noise_builder.seed);
+impl Perlin {
+    pub fn build(perlin_noise_builder: PerlinBuilder) -> Self {
+        let resolution = perlin_noise_builder.resolution;
+        // let mut rng = StdRng::seed_from_u64(perlin_noise_builder.seed);
+        let mut w = Self {
+            texture3d: RWTexture3D {
+                data: {
+                    let len = resolution * resolution * resolution;
+                    vec![Vec4::ZERO; len]
+                },
+                x: resolution,
+                y: resolution,
+                z: resolution,
+            },
+            builder: perlin_noise_builder,
+        };
 
-        todo!()
+        w.generate_noise();
+        w
     }
+
     fn generate_noise(&mut self) {
-        todo!()
+        use rayon::prelude::*;
+
+        let params = &self.builder;
+        self.texture3d
+            .data
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(index, val)| {
+                let id = UVec3::new(
+                    (index % params.resolution) as u32,
+                    ((index / params.resolution) % params.resolution) as u32,
+                    (index / (params.resolution * params.resolution)) as u32,
+                );
+                let pos = id.as_vec3() / params.resolution as f32;
+                let noise_sum = Perlin::perlin(params.num_points_a, pos, params.tile)
+                    + Perlin::perlin(params.num_points_b, pos, params.tile) * params.persistence
+                    + Perlin::perlin(params.num_points_c, pos, params.tile)
+                        * params.persistence
+                        * params.persistence;
+
+                let max_val =
+                    1.0 + (params.persistence) + (params.persistence * params.persistence);
+
+                let noise_sum = noise_sum / max_val;
+                let noise_sum = if params.invert_noise {
+                    1.0 - noise_sum
+                } else {
+                    noise_sum
+                };
+                *val = *val * (1.0 - params.color_mask) + noise_sum * params.color_mask;
+            });
     }
 
     pub fn sample_level(&self, vec3: Vec3) -> Vec4 {
         self.texture3d.sample_level(vec3, 0)
+    }
+
+    fn perlin(num_cells: usize, sample_pos: Vec3, tile: f32) -> f32 {
+        #[inline]
+        fn mod289_vec3(x: Vec3) -> Vec3 {
+            x - (x / 289.0).floor() * 289.0
+        }
+        #[inline]
+        fn mod289_vec2(x: Vec2) -> Vec2 {
+            x - (x / 289.0).floor() * 289.0
+        }
+        #[inline]
+        fn permute(x: Vec3) -> Vec3 {
+            mod289_vec3((x * 34.0 + 1.0) * x)
+        }
+        #[inline]
+        fn taylor_inv_sqrt(r: Vec3) -> Vec3 {
+            Vec3::new(1.79284291400159, 1.79284291400159, 1.79284291400159)
+                - r * Vec3::new(0.85373472095314, 0.85373472095314, 0.85373472095314)
+        }
+        #[inline]
+        fn snoise(v: Vec2) -> f32 {
+            let c = Vec4::new(
+                0.211324865405187,  // (3.0 - sqrt(3.0)) / 6.0
+                0.366025403784439,  // 0.5 * (sqrt(3.0) - 1.0)
+                -0.577350269189626, // -1.0 + 2.0 * C.x
+                0.024390243902439,  // 1.0 / 41.0
+            );
+
+            let i = (v + v.dot(c.yy())).floor();
+            let x0 = v - i + i.dot(c.xx());
+
+            let i1 = Vec2::new(
+                if x0.x > x0.y { 1.0 } else { 0.0 },
+                if x0.x > x0.y { 0.0 } else { 1.0 },
+            );
+
+            let x1 = x0 - i1 + c.xx();
+            let x2 = x0 + c.zz();
+
+            let i = mod289_vec2(i);
+            let p = permute(
+                permute(Vec3::new(i.y, i.y + i1.y, i.y + 1.0))
+                    + Vec3::new(i.x, i.x + i1.x, i.x + 1.0),
+            );
+
+            let m = (Vec3::new(0.5, 0.5, 0.5) - Vec3::new(x0.dot(x0), x1.dot(x1), x2.dot(x2)))
+                .max(Vec3::ZERO);
+            let m = m * m * m * m;
+
+            let x = 2.0 * (p * c.www()).fract() - 1.0;
+            let h = x.abs() - 0.5;
+            let ox = (x + 0.5).floor();
+            let a0 = x - ox;
+
+            let m = m * taylor_inv_sqrt(a0 * a0 + h * h);
+
+            let g = Vec3::new(
+                a0.x * x0.x + h.x * x0.y,
+                a0.y * x1.x + h.y * x1.y,
+                a0.z * x2.x + h.z * x2.y,
+            );
+
+            (130.0 * m.dot(g)) * 0.5 + 0.5
+        }
+
+        snoise(Vec2::new(
+            sample_pos.z * tile * num_cells as f32,
+            sample_pos.x * tile * num_cells as f32,
+        ))
     }
 }

@@ -1,9 +1,8 @@
-use egui::{Color32, Stroke, TextureId};
+use egui::{Color32, Stroke};
 
 use crate::canvas::painter::Painter3D;
 use crate::managers::Manager;
 use crate::object::camera::Camera;
-use crate::object::objects::Sun;
 use crate::scene::scene::Scene;
 use crate::visitor::draw_visitor::DrawVisitor;
 use crate::visitor::Visitable;
@@ -30,13 +29,10 @@ impl DrawManager {
 
     pub fn draw_scene(&self, scene: &Scene, camera: &Camera) {
         if let Some(canvas) = &self.canvas {
-            let mut visitor = DrawVisitor::new(camera, canvas)
-                .with_stroke(self.stroke);
+            let mut visitor = DrawVisitor::new(camera, canvas).with_stroke(self.stroke);
 
             scene.accept(&mut visitor);
         }
-
-       
     }
 }
 

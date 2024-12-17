@@ -1,13 +1,13 @@
 use std::fmt::{Debug, Formatter};
 use std::ops::{Deref, DerefMut};
 
+use crate::object::objects::texture3d::{Perlin, PerlinBuilder};
+use crate::visitor::{Visitable, Visitor};
 use egui::Color32;
-use glam::{FloatExt, IVec3, Vec3, Vec4};
+use glam::{FloatExt, IVec3, Vec3, Vec3Swizzles, Vec4};
 use log::info;
 
-use crate::visitor::{Visitable, Visitor};
-
-use super::textures::{Worley, WorleyBuilder};
+use super::textures::texture3d::{Worley, WorleyBuilder};
 use super::BoundingBox;
 
 #[inline]
@@ -68,6 +68,7 @@ pub struct CloudBuilder {
     pub col_b: Color32,
     pub noise: WorleyBuilder,
     pub detail_noise: WorleyBuilder,
+    pub weather_noise: PerlinBuilder,
     pub height_map_factor: f32,
     pub volume_offset: f32,
     pub edge_distance: f32,
@@ -90,6 +91,11 @@ impl CloudBuilder {
 
     pub fn with_detail_noise(mut self, worley_builder: WorleyBuilder) -> Self {
         self.detail_noise = worley_builder;
+        self
+    }
+
+    pub fn with_weather_noise(mut self, perlin_builder: PerlinBuilder) -> Self {
+        self.weather_noise = perlin_builder;
         self
     }
 
@@ -236,6 +242,7 @@ impl CloudBuilder {
 pub struct Cloud {
     noise: Worley,
     detail_noise: Worley,
+    weather_map: Perlin,
     pub cloud_params: CloudBuilder,
 }
 
@@ -263,10 +270,12 @@ impl Cloud {
         info!("Cloud created at {:?}", cloud_params.bounding_box);
         let noise = cloud_params.noise.build();
         let detail_noise = cloud_params.detail_noise.build();
+        let weather_map = cloud_params.weather_noise.build();
         Self {
             cloud_params,
             noise,
             detail_noise,
+            weather_map,
         }
     }
 
@@ -287,10 +296,11 @@ impl Cloud {
         const OFFSET_SPEED: f32 = 1.0 / 100.0;
 
         let uvw = ray_pos * self.cloud_scale * BASE_SCALE + self.offset * OFFSET_SPEED;
-        let shape = self.noise.sample_level(uvw);
+        let shape = self.noise.sample_level(uvw).abs();
 
         let bb = self.bounding_box();
         let size = bb.size();
+        let center = bb.center();
         let container_edge_fade_dst = self.edge_distance;
 
         let dst_from_edge_x = (ray_pos.x - bb.min.x)
@@ -301,9 +311,18 @@ impl Cloud {
             .min(container_edge_fade_dst);
         let edge_weight = (dst_from_edge_x.min(dst_from_edge_z)) / container_edge_fade_dst;
 
+        let weather_uv = (size.xz() * 0.5 + (ray_pos.xz() - center.xz())) / size.x.max(size.z);
+        let weather_map = self.weather_map.sample_level(Vec3::new(weather_uv.x, 0.0, weather_uv.y)).x * 0.5;
+        // println!("{:?}", weather_map);
+        let g_min = weather_map.remap(0.0, 1.0, 0.1, 0.5);
+        let g_max = weather_map.remap(0.0, 1.0, g_min, 0.9);
+
+        // let g_max = 0.7;
+        // let g_min = 0.3;
+
         let height_percent = (ray_pos.y - bb.min.y) / size.y;
-        let height_gradient = remap(height_percent, 0.0, 0.3, 0.0, 1.0).clamp(0.0, 1.0)
-            * remap(height_percent, 1.0, 0.7, 0.0, 1.0).clamp(0.0, 1.0);
+        let height_gradient = height_percent.remap(0.0, g_min, 0.0, 1.0).clamp(0.0, 1.0)
+            * height_percent.remap(1.0, g_max, 0.0, 1.0).clamp(0.0, 1.0);
         let height_gradient = height_gradient * edge_weight * self.height_map_factor;
 
         let normalized_shape_weights =
@@ -316,17 +335,18 @@ impl Cloud {
             let detail_sample_pos = uvw * self.detail_noise_scale
                 + self.detail_offset * OFFSET_SPEED
                 + self.offset * OFFSET_SPEED;
-            let detail_noise = self.detail_noise.sample_level(detail_sample_pos);
+            let detail_noise = self.detail_noise.sample_level(detail_sample_pos).abs();
 
             let normalized_detail_weights =
                 self.detail_weights / self.detail_weights.dot(Vec4::ONE);
             let detail_fbm = detail_noise.dot(normalized_detail_weights);
+            // let detail_fbm = 0.5;
 
             let one_minus_shape = 1.0 - shape_fbm;
-            let detail_erode_weight = one_minus_shape.powf(3.0);
+            let detail_erode_weight = one_minus_shape.powf(3.0_f32);
             let cloud_density = base_shape_density
                 - (1.0 - detail_fbm) * detail_erode_weight * self.detail_noise_weight;
-
+            // println!("{:?}", cloud_density * self.density_multiplier);
             return cloud_density * self.density_multiplier;
         }
 
@@ -348,7 +368,7 @@ impl Cloud {
             p += dir_to_light * step_size_f32;
         }
 
-        let transmittance = beer(total_density * self.light_absorption_toward_sun);
+        let transmittance = beer(total_density * self.light_absorption_toward_sun) ;
         transmittance.lerp(1.0, self.darkness_threshold)
     }
 }

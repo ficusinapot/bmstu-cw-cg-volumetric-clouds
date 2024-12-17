@@ -12,9 +12,10 @@ domain = { path = "domain" }
 env_logger = { workspace = true }
 log = { workspace = true }
 eframe = { workspace = true }
+rayon = { workspace = true }
 
 [workspace]
-members = ["worley"]
+members = ["worley", "perlin", "research"]
 
 [workspace.dependencies]
 env_logger = "0.11.5"
@@ -24,4 +25,4 @@ eframe = { version = "0.29.1" }
 egui = { version = "0.29.1", features = ["serde", "mint"] }
 glam = { version = "0.29.0", features = ["serde", "mint"] }
 mint = "0.5.9"
-
+rayon = "1.10.0"

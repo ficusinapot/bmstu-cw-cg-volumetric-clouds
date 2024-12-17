@@ -69,13 +69,13 @@ impl DerefMut for PerlinNoise {
 // impl PerlinNoise {
 //     pub fn build(blue_noise_builder: PerlinNoiseBuilder) -> Self {
 //         let _rng = StdRng::seed_from_u64(blue_noise_builder.seed);
-// 
+//
 //         todo!()
 //     }
 //     fn generate_noise(&mut self) {
 //         todo!()
 //     }
-// 
+//
 //     pub fn sample_level(&self, vec3: Vec3) -> Vec4 {
 //         self.texture2d.sample_level(vec3, 0)
 //     }

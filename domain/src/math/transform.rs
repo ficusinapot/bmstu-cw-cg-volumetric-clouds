@@ -1,10 +1,7 @@
-use egui::{Rect, Vec2};
 // glam's types are part of our interface
 // TODO: use mint? But then we'd have to convert every time ...
 pub use glam;
-use glam::{Mat4, Vec3Swizzles, Vec4, Vec4Swizzles};
-
-use crate::object::camera::Camera;
+use glam::{Mat4, Vec3Swizzles, Vec4Swizzles};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Transform {
@@ -38,9 +35,10 @@ impl Transform {
         (sc + self.rect.min.to_vec2(), dc.z)
     }
 
-    pub fn egui_to_world(&self, screen: Vec2, depth: f32) -> glam::Vec3 {
+    pub fn egui_to_world(&self, screen: egui::Vec2, depth: f32) -> glam::Vec3 {
         let sc = screen - self.rect.min.to_vec2();
-        let sc = glam::Vec2::new(sc.x, sc.y) / glam::Vec2::new(self.rect.width(), self.rect.height());
+        let sc =
+            glam::Vec2::new(sc.x, sc.y) / glam::Vec2::new(self.rect.width(), self.rect.height());
         let mut dc = sc * 2.0 - glam::Vec2::ONE;
 
         dc.y *= -1.0;
@@ -58,24 +56,30 @@ impl Transform {
     }
 }
 
-#[test]
-fn test_world_to_egui() {
-    let mut camera = Camera::default();
-    camera.pivot(1.0, 1.0);
-    camera.zoom(3.0);
-    camera.pan(1.0, 1.0);
+#[cfg(test)]
+mod tests {
+    use crate::math::Transform;
+    use crate::object::camera::Camera;
+    use egui::Rect;
 
-    let world_position = glam::Vec3::new(6.007933, -0.25131124, 0.9);
-    let width = 1920;
-    let height = 1080;
+    #[test]
+    fn test_world_to_egui() {
+        let mut camera = Camera::default();
+        camera.pivot(1.0, 1.0);
+        camera.zoom(3.0);
+        camera.pan(1.0, 1.0);
 
-    let r = (1920.0, 1080.0).into();
-    let mx = camera.projection(width as f32, height as f32) * camera.view();
-    let t = Transform::new(mx,
-                           Rect::from_min_size((0.0, 0.0).into(), r));
+        let world_position = glam::Vec3::new(6.007933, -0.25131124, 0.9);
+        let width = 1920;
+        let height = 1080;
 
-    println!("{:?}", world_position);
-    let res = t.world_to_egui(world_position);
-    println!("{:?}", res);
-    println!("{:?}", t.egui_to_world(res.0, 0.976));
+        let r = (1920.0, 1080.0).into();
+        let mx = camera.projection(width as f32, height as f32) * camera.view();
+        let t = Transform::new(mx, Rect::from_min_size((0.0, 0.0).into(), r));
+
+        println!("{:?}", world_position);
+        let res = t.world_to_egui(world_position);
+        println!("{:?}", res);
+        println!("{:?}", t.egui_to_world(res.0, 0.976));
+    }
 }

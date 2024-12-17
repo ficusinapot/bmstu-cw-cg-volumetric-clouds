@@ -1,20 +1,16 @@
-use std::cmp::max;
 use std::collections::HashMap;
-use std::ops::{Deref, Neg, Sub};
+use std::ops::Sub;
 use std::sync::{Arc, Mutex};
 
-use egui::{Color32, ColorImage, Pos2, Stroke, TextureId};
-use egui::ahash::AHashMap;
-use glam::{FloatExt, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
+use egui::{Color32, Pos2, Stroke, TextureId};
+use glam::{Vec3, Vec4, Vec4Swizzles};
 use log::debug;
-use rand::{random, Rng, thread_rng};
-use rayon::iter::IntoParallelRefMutIterator;
 
 use crate::canvas::painter::Painter3D;
 use crate::math::Transform;
 use crate::object::camera::Camera;
-use crate::object::objects::{BoundingBox, Cloud, Grid, Sun, Terrain};
 use crate::object::objects::cloud::{beer, hg, phase};
+use crate::object::objects::{BoundingBox, Cloud, Grid, Sun, Terrain};
 use crate::scene::scene_composite::SceneObjects;
 use crate::visitor::{Visitable, Visitor};
 
@@ -119,7 +115,8 @@ impl<'a> Visitor for DrawVisitor<'a> {
             .canvas
             .ctx()
             .data_mut(|x| x.get_persisted::<Sun>("sun".into()));
-        let sun_pos = sun.map(|x| x.get_pos()).unwrap_or_default();
+        let sun = sun.unwrap_or_default();
+        let sun_pos = sun.get_pos();
         let ray_origin = self.camera.pos();
         img.pixels
             .par_iter_mut()
@@ -141,7 +138,7 @@ impl<'a> Visitor for DrawVisitor<'a> {
                     let dst_limit = dst_inside_box;
                     let step_size = dst_inside_box / cloud.num_steps as f32;
                     let mut transmittance = 1.0;
-                    let mut light_energy = Vec3::ZERO;
+                    let mut light_energy = 0.0;
 
                     let entry_point = ray_origin + dst_to_box * ray_dir;
                     let cos_angle = ray_dir.dot(sun_pos);
@@ -163,14 +160,10 @@ impl<'a> Visitor for DrawVisitor<'a> {
                         dst_travelled += step_size;
                     }
 
-                    *pixel = if transmittance >= 0.03 {
+                    *pixel = if 1.0 - transmittance == 0.0 {
                         Color32::TRANSPARENT
                     } else {
-                        let sky_col_base =
-                            col_a.lerp(col_b, ray_dir.y.clamp(0.0, 1.0).abs().sqrt());
-                        let dst_fog = 0.5;
-                        let sky = dst_fog * sky_col_base;
-                        let background_color = background_color * (1.0 - dst_fog) + sky;
+                        let background_color = Vec3::ZERO;
 
                         let focused_eye_cos = cos_angle
                             .clamp(-std::f32::consts::PI, std::f32::consts::PI)
@@ -178,7 +171,7 @@ impl<'a> Visitor for DrawVisitor<'a> {
                         let sun = hg(focused_eye_cos, 0.4).clamp(-1.0, 1.0) * transmittance;
 
                         let cloud_col = light_energy * light_color.xyz();
-                        let col = background_color.xyz() * transmittance + cloud_col;
+                        let col = background_color * transmittance + cloud_col;
                         let col = col.clamp(Vec3::ZERO, Vec3::ONE) * (1.0 - sun)
                             + light_color.xyz() * sun;
                         let (r, g, b) = col.into();
@@ -186,7 +179,7 @@ impl<'a> Visitor for DrawVisitor<'a> {
                             (r * 255.0) as u8,
                             (g * 255.0) as u8,
                             (b * 255.0) as u8,
-                            255,
+                            (255.0 * (1.0 - transmittance)) as u8,
                         )
                     };
                 }
@@ -330,6 +323,7 @@ impl<'a> Visitor for DrawVisitor<'a> {
     }
 
     fn visit_terrain(&mut self, terrain: &Terrain) {
+        
         use rayon::prelude::*;
 
         let sun = self
@@ -344,23 +338,22 @@ impl<'a> Visitor for DrawVisitor<'a> {
         let cloud = self
             .canvas
             .ctx()
-            .data_mut(|x| x.get_persisted::<Cloud>("cloud".into()))
+            .data_mut(|x| x.get_temp::<Cloud>("cloud".into()))
             .unwrap_or_default();
 
         let (width, height) = (1056.0, 900.0);
         let (min_tuple, max_tuple) = (Pos2::ZERO, Pos2::new(width, height));
         let wh = max_tuple - min_tuple;
         let (w, h) = (wh.x as usize, wh.y as usize);
+        let bb = terrain.bounding_box;
 
-        let mut img = Arc::new(Mutex::new(egui::ColorImage::new(
+        let img = Arc::new(Mutex::new(egui::ColorImage::new(
             [w, h],
             Color32::TRANSPARENT,
         )));
         let z_buffer = Arc::new(Mutex::new(HashMap::new()));
 
         terrain.triangles.par_iter().for_each(|(v, (n0, n1, n2))| {
-            let center = v.center();
-            let light = (sun_pos - center).normalize();
             let img = img.clone();
             let z_buffer = z_buffer.clone();
             let get_shadow_factor = |probe: Vec3| -> f32 {
@@ -369,25 +362,26 @@ impl<'a> Visitor for DrawVisitor<'a> {
                 let (dir_to_box, dst_inside_box) = cloud_bb.into();
                 if dst_inside_box != 0.0 {
                     let mut p = probe;
-                    let step_size = dst_inside_box / 10.0;
+                    let num_steps = terrain.num_shadows_steps;
+                    let step_size = dst_inside_box / num_steps as f32;
                     p += dir_to_box * sun_dir;
 
                     let mut total_density = 0.0;
-                    let step_size_f32 = step_size;
 
-                    for _ in 0..10 {
+                    for _ in 0..num_steps {
                         let density = cloud.sample_density(p);
-                        total_density += density.max(0.0) * step_size_f32;
-                        p += sun_dir * step_size_f32;
+                        total_density += density.max(0.0) * step_size;
+                        p += sun_dir * step_size;
                     }
-                    (-total_density / 50.0).exp().clamp(0.0, 1.0)
+                    beer(total_density / terrain.density_scale)
+                        .clamp(terrain.shadow_threshold, 1.0)
                 } else {
                     1.0
                 }
             };
 
             let (v0, v1, v2) = v.to_tuple();
-            let (mut p0, mut p1, mut p2) = (v0, v1, v2);
+            let (p0, p1, p2) = (v0, v1, v2);
 
             let v0 = self.canvas.transform(v0, self.mvp);
             let v1 = self.canvas.transform(v1, self.mvp);
@@ -424,24 +418,34 @@ impl<'a> Visitor for DrawVisitor<'a> {
                             let x1 = get_shadow_factor(p0);
                             let x2 = get_shadow_factor(p1);
                             let x3 = get_shadow_factor(p2);
+                            
+                            let alpha1 = ((sun_pos - p0).normalize()).dot(n0.normalize());
+                            let alpha2 = ((sun_pos - p1).normalize()).dot(n1.normalize());
+                            let alpha3 = ((sun_pos - p2).normalize()).dot(n2.normalize());
 
-                            let interpolated_normal = interpolate(
+                            let beta =
+                                interpolate(Pos2::new(x as f32, y as f32), v0, v1, v2, x1 * alpha1, x2 * alpha2, x3 * alpha3)
+                                ;
+
+                            let dif = 0.55  * beta;
+                            let bottom = color32_to_vec4(terrain.bottom_color).xyz();
+                            let top = color32_to_vec4(terrain.top_color).xyz();
+                            let p0_col = bottom.lerp(top, (p0.y - bb.min.y).abs() / bb.size().y);
+                            let p1_col = bottom.lerp(top, (p1.y - bb.min.y).abs() / bb.size().y);
+                            let p2_col = bottom.lerp(top, (p2.y - bb.min.y).abs() / bb.size().y);
+
+                            let col = interpolate(
                                 Pos2::new(x as f32, y as f32),
                                 v0,
                                 v1,
                                 v2,
-                                n0.clone(),
-                                n1.clone(),
-                                n2.clone(),
+                                p0_col,
+                                p1_col,
+                                p2_col,
                             );
-                            let alpha = light.dot(interpolated_normal.normalize());
-
-                            let beta =
-                                interpolate(Pos2::new(x as f32, y as f32), v0, v1, v2, x1, x2, x3)
-                                    .clamp(0.2, 1.0);
-
-                            let dif = 0.55 * alpha * beta;
-                            let col = Vec3::new(0.71, 0.94, 0.73) * dif;
+                            // let col = Vec3::new(0.71, 0.94, 0.73) * dif;
+                            let col = col * dif;
+                            // let col = Vec3::new(0.71, 0.94, 0.73) * dif;
                             let (r, g, b) = (col.x * 255.0, col.y * 255.0, col.z * 255.0);
                             let color = Color32::from_rgb(r as u8, g as u8, b as u8);
                             let mut z_buffer = z_buffer.lock().unwrap();
@@ -468,7 +472,7 @@ impl<'a> Visitor for DrawVisitor<'a> {
         let handle = self
             .canvas
             .ctx()
-            .load_texture("terrain", img, Default::default());
+            .load_texture("terrain", img, egui::TextureOptions::NEAREST);
         let textureid = TextureId::from(&handle);
         self.canvas.image(
             textureid,
@@ -476,6 +480,8 @@ impl<'a> Visitor for DrawVisitor<'a> {
             egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
             Color32::WHITE,
         );
+
+        // self.visit_bounding_box(&terrain.bounding_box);
     }
 }
 
@@ -496,7 +502,7 @@ impl<'a> DrawVisitor<'a> {
         }
         let sun = sun.unwrap();
 
-        let mut img = egui::ColorImage::new([w, h], Color32::TRANSPARENT);
+        let mut img = egui::ColorImage::new([w, h], Color32::BLACK);
         img.pixels
             .par_iter_mut()
             .enumerate()
@@ -550,15 +556,6 @@ where
     n0 * alpha + n1 * beta + n2 * gamma
 }
 
-fn interpolate_shadow(pos: Pos2, v0: Pos2, v1: Pos2, v2: Pos2, n0: f32, n1: f32, n2: f32) -> f32 {
-    let area_total = (v1.x - v0.x) * (v2.y - v0.y) - (v2.x - v0.x) * (v1.y - v0.y);
-    let alpha = ((v1.x - pos.x) * (v2.y - pos.y) - (v2.x - pos.x) * (v1.y - pos.y)) / area_total;
-    let beta = ((v2.x - pos.x) * (v0.y - pos.y) - (v0.x - pos.x) * (v2.y - pos.y)) / area_total;
-    let gamma = 1.0 - alpha - beta;
-
-    (n0 * alpha + n1 * beta + n2 * gamma)
-}
-
 #[inline]
 fn sign(p1: Pos2, p2: Pos2, p3: Pos2) -> f32 {
     (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y)
@@ -573,4 +570,9 @@ fn inside_triangle(p: Pos2, v1: Pos2, v2: Pos2, v3: Pos2) -> bool {
     let has_pos = (d1 > 0.) || (d2 > 0.) || (d3 > 0.);
 
     !(has_neg && has_pos)
+}
+
+#[inline]
+fn color32_to_vec4(color32: Color32) -> Vec4 {
+    color32.to_array().map(|x| x as f32 / 255.0).into()
 }
