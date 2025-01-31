@@ -5,17 +5,17 @@ use glam::Vec3;
 use rayon::iter::IntoParallelIterator;
 use std::ops::{Deref, DerefMut};
 
-use crate::object::objects::texture3d::{Perlin, PerlinBuilder};
+use crate::object::objects::texture3d::{INoise, INoiseBuilder, Noise, NoiseBuilder, Perlin, PerlinBuilder};
 use crate::object::objects::textures::texture3d::{Worley, WorleyBuilder};
 use crate::object::objects::BoundingBox;
 use crate::visitor::{Visitable, Visitor};
 
-#[derive(Debug, Default, PartialEq, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct TerrainBuilder {
     pub bounding_box: BoundingBox,
     pub scale: usize,
     pub noise_weight: glam::Vec4,
-    pub noise: PerlinBuilder,
+    pub noise: NoiseBuilder,
     pub top_color: Color32,
     pub bottom_color: Color32,
     pub shadow_threshold: f32,
@@ -39,8 +39,8 @@ impl TerrainBuilder {
         self
     }
 
-    pub fn with_noise(mut self, noise_builder: PerlinBuilder) -> Self {
-        self.noise = noise_builder;
+    pub fn with_noise(mut self, noise_builder: impl Into<NoiseBuilder>) -> Self {
+        self.noise = noise_builder.into();
         self
     }
 
@@ -124,11 +124,11 @@ impl TriangleMesh {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Terrain {
     pub terrain_builder: TerrainBuilder,
     pub triangles: Vec<(TriangleMesh, (Vec3, Vec3, Vec3))>,
-    perlin: Perlin,
+    perlin: Noise,
 }
 
 impl Deref for Terrain {
@@ -163,7 +163,7 @@ impl Terrain {
         res
     }
 
-    pub fn regenerate_noise(&mut self, worley_builder: PerlinBuilder) {
+    pub fn regenerate_noise(&mut self, worley_builder: NoiseBuilder) {
         self.perlin = worley_builder.build();
     }
 
@@ -211,13 +211,10 @@ impl Terrain {
                         let sample_pos2 = bb.min
                             + Vec3::new(base_x, sample_y, next_z)
                                 / Vec3::new(bb.size().x, 1.0, bb.size().z);
-
-                        // let sample_pos = bb.min + Vec3::new(base_x, sample_y, base_z) / bb.size();
+                        
                         let worley_height =
                             bb.min.y + noise.sample_level(sample_pos).x * (bb.max.y - bb.min.y);
-                        // println!("{:?}", worley_height);
-
-                        // let sample_pos2 = bb.min + Vec3::new(base_x, sample_y, next_z) / bb.size();
+                        
                         let worley_height2 =
                             bb.min.y + noise.sample_level(sample_pos2).x * (bb.max.y - bb.min.y);
 

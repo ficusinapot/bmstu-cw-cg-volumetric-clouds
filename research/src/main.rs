@@ -266,7 +266,7 @@ fn main() {
     
     let camera = Camera::default();
 
-    let sun = Sun::new(10.0, -135.0);
+    let sun = Sun::new(10.0, -135.0, -90.0);
     let mut visitor = DrawVisitorTest::new(&camera, &sun);
     let mut visitor2 = DrawVisitorTest2::new(&camera, &sun);
     
@@ -284,12 +284,12 @@ fn main() {
         let elapsed_time = start_time.elapsed() / nums;
         println!("1: steps: {}, time: {:?}", i, elapsed_time);
 
-        let start_time = Instant::now();
-        for _ in 0..nums {
-            visitor2.visit_cloud(&cloud);
-        }
-        let elapsed_time = start_time.elapsed() / nums;
-        println!("2: steps: {}, time: {:?}", i, elapsed_time);
+        // let start_time = Instant::now();
+        // for _ in 0..nums {
+        //     visitor2.visit_cloud(&cloud);
+        // }
+        // let elapsed_time = start_time.elapsed() / nums;
+        // println!("2: steps: {}, time: {:?}", i, elapsed_time);
         
     }
     

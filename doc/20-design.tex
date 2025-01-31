@@ -24,7 +24,7 @@
 На рисунке~\ref{fig:cloud_fc} представлена схема алгоритма отрисовки облака.
 \begin{figure}[ht!]
 	\centering
-	\includegraphics[width=1.05\textwidth, page=1]{assets/img/cloud_flowchart.pdf}   
+	\includegraphics[width=1.0\textwidth, page=1]{assets/img/cloud_flowchart.pdf}   
 	\caption{Схема алгоритма отрисовки облака}
 	\label{fig:cloud_fc}
 \end{figure}
@@ -49,7 +49,7 @@
 На рисунке~\ref{fig:cloud_fc3} представлена схема алгоритма отрисовки ландшафта.
 \begin{figure}[ht!]
 	\centering
-	\includegraphics[width=1.0\textwidth, page=4]{assets/img/cloud_flowchart.pdf}   
+	\includegraphics[width=0.65\textwidth, page=4]{assets/img/cloud_flowchart.pdf}   
 	\caption{Схема алгоритма отрисовки ландшафта.}
 	\label{fig:cloud_fc3}
 \end{figure}
@@ -70,7 +70,7 @@
 
 Менеджер камеры управляет камерой, для которой можно задавать точку наблюдения \textit{pivot} и удаление от неё \textit{distance}, рыскание \textit{yaw} и тангаж \textit{pitch}.
 
-Менеджер отрисовки обращается к менеджерам сцены и камерой и передает камеру и элементы сцены в посетителя--отрисовщика для отрисовки последних.
+Менеджер отрисовки обращается к менеджерам сцены и камере и передает камеру и элементы сцены в посетителя--отрисовщика для отрисовки последних.
 
 Облака и ландшафт используют шум Перлина или Ворли---Вороного. Для получения значения шума в определённой точке облака используется метод \textit{sample\_density}. Облако и ландшафт так же хранят ограничивающий параллелепипед, задаваемый двумя точками \textit{min\_max} в пространстве.
 

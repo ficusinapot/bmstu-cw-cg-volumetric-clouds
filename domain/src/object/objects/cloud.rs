@@ -1,13 +1,12 @@
 use std::fmt::{Debug, Formatter};
 use std::ops::{Deref, DerefMut};
 
-use crate::object::objects::texture3d::{Perlin, PerlinBuilder};
+use crate::object::objects::texture3d::{INoise, INoiseBuilder, Noise, NoiseBuilder};
 use crate::visitor::{Visitable, Visitor};
 use egui::Color32;
 use glam::{FloatExt, IVec3, Vec3, Vec3Swizzles, Vec4};
 use log::info;
 
-use super::textures::texture3d::{Worley, WorleyBuilder};
 use super::BoundingBox;
 
 #[inline]
@@ -24,7 +23,7 @@ pub fn hg(a: f32, g: f32) -> f32 {
 #[inline]
 pub fn phase(a: f32, phase_params: Vec4) -> f32 {
     let blend = 0.5;
-    let hg_blend = hg(a, phase_params.x) * (1.0 - blend) + hg(a, -phase_params.y) * blend;
+    let hg_blend = hg(a, phase_params.x) * (1.0 - blend) + hg(a, phase_params.y) * blend;
     phase_params.y + hg_blend * phase_params.z
 }
 
@@ -33,7 +32,7 @@ pub fn beer(d: f32) -> f32 {
     (-d).exp()
 }
 
-#[derive(Default, Copy, Clone, Debug, PartialEq)]
+#[derive(Default, Debug, Copy,Clone)]
 pub struct CloudBuilder {
     pub bounding_box: BoundingBox,
     pub offset: Vec3,
@@ -66,9 +65,9 @@ pub struct CloudBuilder {
     pub light_color: Color32,
     pub col_a: Color32,
     pub col_b: Color32,
-    pub noise: WorleyBuilder,
-    pub detail_noise: WorleyBuilder,
-    pub weather_noise: PerlinBuilder,
+    pub noise: NoiseBuilder,
+    pub detail_noise: NoiseBuilder,
+    pub weather_noise: NoiseBuilder,
     pub height_map_factor: f32,
     pub volume_offset: f32,
     pub edge_distance: f32,
@@ -84,18 +83,18 @@ impl CloudBuilder {
         self
     }
 
-    pub fn with_noise(mut self, worley_builder: WorleyBuilder) -> Self {
-        self.noise = worley_builder;
+    pub fn with_noise(mut self, builder: impl Into<NoiseBuilder>) -> Self {
+        self.noise = builder.into();
         self
     }
 
-    pub fn with_detail_noise(mut self, worley_builder: WorleyBuilder) -> Self {
-        self.detail_noise = worley_builder;
+    pub fn with_detail_noise(mut self, builder: impl Into<NoiseBuilder>) -> Self {
+        self.detail_noise = builder.into();
         self
     }
 
-    pub fn with_weather_noise(mut self, perlin_builder: PerlinBuilder) -> Self {
-        self.weather_noise = perlin_builder;
+    pub fn with_weather_noise(mut self, builder: impl Into<NoiseBuilder>) -> Self {
+        self.weather_noise = builder.into();
         self
     }
 
@@ -238,11 +237,11 @@ impl CloudBuilder {
     }
 }
 
-#[derive(Default, PartialEq, Clone)]
+#[derive(Clone, Default)]
 pub struct Cloud {
-    noise: Worley,
-    detail_noise: Worley,
-    weather_map: Perlin,
+    noise: Noise,
+    detail_noise: Noise,
+    weather_map: Noise,
     pub cloud_params: CloudBuilder,
 }
 
@@ -279,12 +278,12 @@ impl Cloud {
         }
     }
 
-    pub fn regenerate_noise(&mut self, worley_builder: WorleyBuilder) {
-        self.noise = Worley::build(worley_builder);
+    pub fn regenerate_noise(&mut self, builder: impl Into<NoiseBuilder>) {
+        self.noise = builder.into().build();
     }
 
-    pub fn regenerate_detail_noise(&mut self, worley_builder: WorleyBuilder) {
-        self.detail_noise = Worley::build(worley_builder);
+    pub fn regenerate_detail_noise(&mut self, builder: impl Into<NoiseBuilder>) {
+        self.detail_noise = builder.into().build();
     }
 
     pub fn bounding_box(&self) -> &BoundingBox {
@@ -364,11 +363,11 @@ impl Cloud {
 
         for _ in 0..self.num_steps_light {
             let density = self.sample_density(p);
-            total_density += density.max(0.0) * step_size_f32;
+            total_density += density.max(0.0);
             p += dir_to_light * step_size_f32;
         }
 
-        let transmittance = beer(total_density * self.light_absorption_toward_sun) ;
+        let transmittance = beer(total_density * self.light_absorption_toward_sun * step_size_f32);
         transmittance.lerp(1.0, self.darkness_threshold)
     }
 }

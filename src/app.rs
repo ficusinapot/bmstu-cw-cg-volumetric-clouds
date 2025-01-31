@@ -7,10 +7,10 @@ use domain::facade::{Executor, Facade};
 use domain::math::transform::glam;
 use domain::math::transform::glam::{Vec3, Vec4};
 use domain::object::camera::Camera;
+use domain::object::objects::{Grid, Sun};
 use domain::object::objects::cloud::CloudBuilder;
-use domain::object::objects::Sun;
 use domain::object::objects::terrain::TerrainBuilder;
-use domain::object::objects::texture3d::{PerlinBuilder, WorleyBuilder};
+use domain::object::objects::texture3d::{NoiseBuilder, PerlinBuilder, WorleyBuilder};
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -99,10 +99,8 @@ impl App {
                             ));
                             ui.label("Высота облака");
                             if resp.changed() {
-                                self.executor.exec(SceneCommand::MoveBoundingBox(
-                                    "cloud",
-                                    self.move_vector,
-                                ));
+                                self.executor
+                                    .exec(SceneCommand::MoveBoundingBox("cloud", self.move_vector));
                             }
                         });
                         ui.separator();
@@ -190,38 +188,6 @@ impl App {
                                 ));
                             }
                         });
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(
-                        //         egui::widgets::Slider::new(
-                        //             &mut self.cloud.detail_noise_scale,
-                        //             1.0..=1000.0,
-                        //         )
-                        //         .drag_value_speed(0.001),
-                        //     );
-                        //     ui.label("Detail noise scale");
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetDetailNoiseScale(
-                        //             "cloud",
-                        //             self.cloud.detail_noise_scale,
-                        //         ));
-                        //     }
-                        // });
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(
-                        //         egui::widgets::Slider::new(
-                        //             &mut self.cloud.detail_noise_weight,
-                        //             1.0..=50.0,
-                        //         )
-                        //         .drag_value_speed(0.001),
-                        //     );
-                        //     ui.label("Detail noise weight");
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetDetailNoiseWeight(
-                        //             "cloud",
-                        //             self.cloud.detail_noise_weight,
-                        //         ));
-                        //     }
-                        // });
                         ui.horizontal(|ui| {
                             let resp = ui.add(
                                 egui::widgets::Slider::new(
@@ -238,166 +204,63 @@ impl App {
                                 ));
                             }
                         });
-
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(
-                        //         egui::widgets::Slider::new(
-                        //             &mut self.cloud.density_threshold,
-                        //             -10.0..=10.0,
-                        //         )
-                        //         .drag_value_speed(0.001),
-                        //     );
-                        //     ui.label("density_threshold");
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetDensityThreshold(
-                        //             "cloud",
-                        //             self.cloud.density_threshold,
-                        //         ));
-                        //     }
-                        // });
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(egui::widgets::Slider::new(
-                        //         &mut self.cloud.detail_weights.x,
-                        //         -10.0..=10.0,
-                        //     ));
-                        //     ui.label("detail_weights_x");
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetDetailWeights(
-                        //             "cloud",
-                        //             self.cloud.detail_weights,
-                        //         ));
-                        //     }
-                        // });
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(egui::widgets::Slider::new(
-                        //         &mut self.cloud.detail_weights.y,
-                        //         -10.0..=10.0,
-                        //     ));
-                        //     ui.label("detail_weights_y");
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetDetailWeights(
-                        //             "cloud",
-                        //             self.cloud.detail_weights,
-                        //         ));
-                        //     }
-                        // });
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(
-                        //         egui::widgets::Slider::new(
-                        //             &mut self.cloud.detail_weights.z,
-                        //             -10.0..=10.0,
-                        //         )
-                        //         .drag_value_speed(0.001),
-                        //     );
-                        //     ui.label("detail_weights_z");
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetDetailWeights(
-                        //             "cloud",
-                        //             self.cloud.detail_weights,
-                        //         ));
-                        //     }
-                        // });
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(egui::widgets::Slider::new(
-                        //         &mut self.cloud.shape_noise_weights.x,
-                        //         -0.0..=10.0,
-                        //     ));
-                        //     ui.label("shape_noise_weights_x");
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetShapeNoiseWeights(
-                        //             "cloud",
-                        //             self.cloud.shape_noise_weights,
-                        //         ));
-                        //     }
-                        // });
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(
-                        //         egui::widgets::Slider::new(
-                        //             &mut self.cloud.shape_noise_weights.y,
-                        //             0.0..=10.0,
-                        //         ), // .drag_value_speed(0.001),
-                        //     );
-                        //     ui.label("shape_noise_weights_y");
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetShapeNoiseWeights(
-                        //             "cloud",
-                        //             self.cloud.shape_noise_weights,
-                        //         ));
-                        //     }
-                        // });
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(
-                        //         egui::widgets::Slider::new(
-                        //             &mut self.cloud.shape_noise_weights.z,
-                        //             0.0..=10.0,
-                        //         )
-                        //         .drag_value_speed(0.001),
-                        //     );
-                        //     ui.label("shape_noise_weights_z");
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetShapeNoiseWeights(
-                        //             "cloud",
-                        //             self.cloud.shape_noise_weights,
-                        //         ));
-                        //     }
-                        // });
                         ui.separator();
-                        // ui.label("Фазовая функция");
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(egui::widgets::Slider::new(
-                        //         &mut self.cloud.phase_params.x,
-                        //         0.0..=0.05,
-                        //     ));
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetPhaseParams(
-                        //             "cloud",
-                        //             self.cloud.phase_params,
-                        //         ));
-                        //     }
-                        // });
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(egui::widgets::Slider::new(
-                        //         &mut self.cloud.phase_params.y,
-                        //         0.0..=1.0,
-                        //     ));
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetPhaseParams(
-                        //             "cloud",
-                        //             self.cloud.phase_params,
-                        //         ));
-                        //     }
-                        // });
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(
-                        //         egui::widgets::Slider::new(
-                        //             &mut self.cloud.phase_params.z,
-                        //             0.0..=1.0,
-                        //         )
-                        //         .drag_value_speed(0.001),
-                        //     );
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetPhaseParams(
-                        //             "cloud",
-                        //             self.cloud.phase_params,
-                        //         ));
-                        //     }
-                        // });
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(
-                        //         egui::widgets::Slider::new(
-                        //             &mut self.cloud.phase_params.w,
-                        //             -0.0..=1.0,
-                        //         )
-                        //         .drag_value_speed(0.001),
-                        //     );
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetPhaseParams(
-                        //             "cloud",
-                        //             self.cloud.phase_params,
-                        //         ));
-                        //     }
-                        // });
-                        // ui.separator();
+                        ui.label("Фазовая функция");
+                        ui.horizontal(|ui| {
+                            let resp = ui.add(egui::widgets::Slider::new(
+                                &mut self.cloud.phase_params.x,
+                                0.0..=0.05,
+                            ));
+                            if resp.changed() {
+                                self.executor.exec(SceneCommand::SetPhaseParams(
+                                    "cloud",
+                                    self.cloud.phase_params,
+                                ));
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            let resp = ui.add(egui::widgets::Slider::new(
+                                &mut self.cloud.phase_params.y,
+                                0.0..=1.0,
+                            ));
+                            if resp.changed() {
+                                self.executor.exec(SceneCommand::SetPhaseParams(
+                                    "cloud",
+                                    self.cloud.phase_params,
+                                ));
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            let resp = ui.add(
+                                egui::widgets::Slider::new(
+                                    &mut self.cloud.phase_params.z,
+                                    0.0..=1.0,
+                                )
+                                .drag_value_speed(0.001),
+                            );
+                            if resp.changed() {
+                                self.executor.exec(SceneCommand::SetPhaseParams(
+                                    "cloud",
+                                    self.cloud.phase_params,
+                                ));
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            let resp = ui.add(
+                                egui::widgets::Slider::new(
+                                    &mut self.cloud.phase_params.w,
+                                    -0.0..=1.0,
+                                )
+                                .drag_value_speed(0.001),
+                            );
+                            if resp.changed() {
+                                self.executor.exec(SceneCommand::SetPhaseParams(
+                                    "cloud",
+                                    self.cloud.phase_params,
+                                ));
+                            }
+                        });
+                        ui.separator();
                         ui.label("Смещение");
                         ui.horizontal(|ui| {
                             let resp = ui.add(egui::widgets::Slider::new(
@@ -438,23 +301,6 @@ impl App {
                             }
                         });
                         ui.separator();
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.color_edit_button_srgba(&mut self.cloud.col_a);
-                        //     ui.label("Цвет");
-                        //     if resp.changed() {
-                        //         self.executor
-                        //             .exec(SceneCommand::SetColA("cloud", self.cloud.col_a));
-                        //     }
-                        // });
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.color_edit_button_srgba(&mut self.cloud.col_b);
-                        //     ui.label("Tint Color");
-                        //     if resp.changed() {
-                        //         self.executor
-                        //             .exec(SceneCommand::SetColB("cloud", self.cloud.col_b));
-                        //     }
-                        // });
-                        ui.separator();
                         ui.horizontal(|ui| {
                             let resp = ui.add(
                                 egui::widgets::Slider::new(
@@ -472,22 +318,6 @@ impl App {
                                     ));
                             }
                         });
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(
-                        //         egui::widgets::Slider::new(
-                        //             &mut self.cloud.ray_offset_strength,
-                        //             0.0..=100.0,
-                        //         )
-                        //         .drag_value_speed(0.01),
-                        //     );
-                        //     ui.label("ray_offset_strength");
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetRayOffsetStrength(
-                        //             "cloud",
-                        //             self.cloud.ray_offset_strength,
-                        //         ));
-                        //     }
-                        // });
                         ui.horizontal(|ui| {
                             let resp = ui.add(
                                 egui::widgets::Slider::new(
@@ -554,22 +384,6 @@ impl App {
                                 ));
                             }
                         });
-                        // ui.horizontal(|ui| {
-                        //     let resp = ui.add(
-                        //         egui::widgets::Slider::new(
-                        //             &mut self.cloud.volume_offset,
-                        //             -1.0..=1.0,
-                        //         )
-                        //         .drag_value_speed(0.01),
-                        //     );
-                        //     ui.label("volume factor");
-                        //     if resp.changed() {
-                        //         self.executor.exec(SceneCommand::SetVolumeOffset(
-                        //             "cloud",
-                        //             self.cloud.volume_offset,
-                        //         ));
-                        //     }
-                        // });
                     });
 
                     ui.collapsing("Шум Вороного", |ui| {
@@ -580,6 +394,13 @@ impl App {
                         let worley_builder = match self.noise_mode {
                             NoiseMode::Shape => &mut self.cloud.noise,
                             NoiseMode::Detail => &mut self.cloud.detail_noise,
+                        };
+
+                        let worley_builder = match worley_builder {
+                            NoiseBuilder::WorleyBuilder(x) => x,
+                            NoiseBuilder::PerlinBuilder(_) => {
+                                return; // todo do ui change depending on type of noise
+                            }
                         };
 
                         ui.horizontal(|ui| {
@@ -643,7 +464,8 @@ impl App {
                                 NoiseMode::Shape => SceneCommand::SetNoise,
                                 NoiseMode::Detail => SceneCommand::SetDetailNoise,
                             };
-                            self.executor.exec(command("cloud", *worley_builder));
+                            self.executor
+                                .exec(command("cloud", (*worley_builder).into()));
                         }
                     });
                 });
@@ -656,8 +478,10 @@ impl App {
                                 ui.add(egui::widgets::Slider::new(&mut self.sun.1, 0.0..=179.0));
                             ui.label("Азумутальный угол");
                             if resp.changed() {
-                                self.executor
-                                    .exec(SceneCommand::SetSunAngle("sun", (-self.sun.1, self.sun.2).into()));
+                                self.executor.exec(SceneCommand::SetSunAngle(
+                                    "sun",
+                                    (-self.sun.1, self.sun.2).into(),
+                                ));
                             }
                         });
                         ui.horizontal(|ui| {
@@ -665,9 +489,10 @@ impl App {
                                 ui.add(egui::widgets::Slider::new(&mut self.sun.2, 0.0..=179.0));
                             ui.label("Зенитный угол");
                             if resp.changed() {
-                                self.executor
-                                    
-                                    .exec(SceneCommand::SetSunAngle("sun", (-self.sun.1, self.sun.2).into()));
+                                self.executor.exec(SceneCommand::SetSunAngle(
+                                    "sun",
+                                    (-self.sun.1, self.sun.2).into(),
+                                ));
                             }
                         });
                     })
@@ -763,6 +588,12 @@ impl App {
                         });
                         ui.collapsing("Шум", |ui| {
                             let worley_builder = &mut self.terrain.noise;
+                            let worley_builder = match worley_builder {
+                                NoiseBuilder::WorleyBuilder(x) => x,
+                                NoiseBuilder::PerlinBuilder(_) => {
+                                    return;
+                                }
+                            };
 
                             ui.horizontal(|ui| {
                                 ui.add(egui::widgets::DragValue::new(&mut worley_builder.seed));
@@ -823,7 +654,7 @@ impl App {
                             if ui.button("Сгенерировать").clicked() {
                                 self.executor.exec(SceneCommand::SetTerrainNoise(
                                     "terrain",
-                                    *worley_builder,
+                                    NoiseBuilder::from(*worley_builder),
                                 ));
                             }
                         });
@@ -863,7 +694,6 @@ struct App {
     background_color: Color32,
     offset_speed: Vec3,
     move_vector: Vec3,
-    extend_vector: Vec3
 }
 
 impl App {
@@ -913,7 +743,7 @@ impl App {
             .with_light_color(Color32::WHITE)
             .with_light_absorption_through_cloud(0.6)
             .with_light_absorption_toward_sun(0.6)
-            .with_phase_params(Vec4::new(0.00, 0.48, 0.37, 0.99))
+            .with_phase_params(Vec4::new(0.00, 0.48, 0.37, 0.34))
             .with_darkness_threshold(0.35)
             .with_edge_distance(1.0)
             .with_ray_offset_strength(0.0)
@@ -926,26 +756,15 @@ impl App {
                     .with_num_points_b(1)
                     .with_num_points_c(5)
                     .with_tile(1.0)
-                    .with_resolution(16)
+                    .with_resolution(128)
                     .with_color_mask(Vec4::new(1.0, 1.0, 1.0, 1.0))
                     .with_persistence(0.3)
                     .with_invert_noise(true),
             );
 
         let mut executor = Facade::default();
-        // executor.exec(SceneCommand::AddObject("grid", Grid::new(10, 1.0).into()));
 
-        executor.exec(CameraCommand::SetCamera(Camera::default()));
-        executor.exec(SceneCommand::AddObject(
-            "cloud",
-            cloud_params.build().into(),
-        ));
-        
         let sun = Sun::new(10.0, -90.0, -90.0);
-        executor.exec(SceneCommand::AddObject(
-            "sun",
-            sun.into(),
-        ));
 
         let terrain_params = TerrainBuilder::default()
             .with_bounding_box((Vec3::new(-2.5, 0.0, -2.5), Vec3::new(2.5, 0.5, 2.5)))
@@ -968,6 +787,13 @@ impl App {
                     .with_persistence(1.3)
                     .with_invert_noise(true),
             );
+        executor.exec(SceneCommand::AddObject("grid", Grid::new(10, 1.0).into()));
+        executor.exec(CameraCommand::SetCamera(Camera::default()));
+        executor.exec(SceneCommand::AddObject("sun", sun.into()));
+        executor.exec(SceneCommand::AddObject(
+            "cloud",
+            cloud_params.build().into(),
+        ));
         executor.exec(SceneCommand::AddObject(
             "terrain",
             terrain_params.build().into(),
@@ -975,14 +801,13 @@ impl App {
 
         Self {
             executor,
-            noise_mode: Default::default(),
+            noise_mode: NoiseMode::Detail,
             cloud: cloud_params,
             terrain: terrain_params,
             background_color: Color32::LIGHT_BLUE,
             offset_speed: Vec3::new(1.0, 0.0, 1.0),
             sun: (sun.d, sun.a.abs(), sun.z.abs()),
             move_vector: Vec3::ZERO,
-            extend_vector: Vec3::ZERO
         }
     }
 }

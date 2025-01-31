@@ -11,7 +11,7 @@ plt.plot(steps, time_2, label='Простой цикл', marker='o')
 plt.plot(steps, time_1, label='Параллельный цикл', marker='d')
 
 plt.xlabel('Количество трассировочных точек')
-plt.ylabel('Время (мс)')
+plt.ylabel('Время отрисовки сцены (мс)')
 plt.legend()
 plt.grid(True, linestyle='--', alpha=0.6)
 

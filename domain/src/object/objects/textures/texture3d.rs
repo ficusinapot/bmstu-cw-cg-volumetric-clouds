@@ -1,5 +1,4 @@
 use std::ops::{Deref, DerefMut, Index, IndexMut};
-use std::sync::{Mutex};
 
 use glam::{IVec3, UVec3, Vec2, Vec3, Vec4, Vec4Swizzles};
 use rand::prelude::StdRng;
@@ -40,14 +39,14 @@ const OFFSETS: [IVec3; 27] = [
 ];
 
 #[derive(Default, Clone, Debug, PartialEq)]
-struct RWTexture3D<T> {
+struct Texture3D<T> {
     data: Vec<T>,
     x: usize,
     y: usize,
     z: usize,
 }
 
-impl<T> Index<UVec3> for RWTexture3D<T> {
+impl<T> Index<UVec3> for Texture3D<T> {
     type Output = T;
 
     fn index(&self, coords: UVec3) -> &Self::Output {
@@ -56,7 +55,7 @@ impl<T> Index<UVec3> for RWTexture3D<T> {
     }
 }
 
-impl<T: Copy> RWTexture3D<T> {
+impl<T: Copy> Texture3D<T> {
     fn sample_level(&self, uvw: Vec3, _level: usize) -> T {
         assert_ne!(self.x, 0);
         assert_ne!(self.y, 0);
@@ -69,14 +68,14 @@ impl<T: Copy> RWTexture3D<T> {
     }
 }
 
-impl<T> IndexMut<UVec3> for RWTexture3D<T> {
+impl<T> IndexMut<UVec3> for Texture3D<T> {
     fn index_mut(&mut self, coords: UVec3) -> &mut Self::Output {
         &mut self.data
             [coords.z as usize * self.x * self.y + coords.y as usize * self.x + coords.x as usize]
     }
 }
 
-#[derive(Default, Clone, Copy, Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Copy, Clone)]
 pub struct WorleyBuilder {
     pub seed: u64,
     pub num_points_a: usize,
@@ -138,10 +137,6 @@ impl WorleyBuilder {
         self.color_mask = color;
         self
     }
-
-    pub fn build(self) -> Worley {
-        Worley::build(self)
-    }
 }
 
 #[derive(Default, Debug, PartialEq, Clone)]
@@ -149,7 +144,7 @@ pub struct Worley {
     points_a: Vec<Vec3>,
     points_b: Vec<Vec3>,
     points_c: Vec<Vec3>,
-    texture3d: RWTexture3D<Vec4>,
+    texture3d: Texture3D<Vec4>,
     pub builder: WorleyBuilder,
 }
 
@@ -166,93 +161,6 @@ impl DerefMut for Worley {
     }
 }
 impl Worley {
-    pub fn build(worley_builder: WorleyBuilder) -> Self {
-        let resolution = worley_builder.resolution;
-        let mut rng = StdRng::seed_from_u64(worley_builder.seed);
-        let mut w = Self {
-            points_a: Self::create_worley_points_buffer(&mut rng, worley_builder.num_points_a),
-            points_b: Self::create_worley_points_buffer(&mut rng, worley_builder.num_points_b),
-            points_c: Self::create_worley_points_buffer(&mut rng, worley_builder.num_points_c),
-            texture3d: RWTexture3D {
-                data: {
-                    let len = resolution * resolution * resolution;
-                    vec![Vec4::ZERO; len]
-                },
-                x: resolution,
-                y: resolution,
-                z: resolution,
-            },
-            builder: worley_builder,
-        };
-
-        w.generate_noise();
-        w
-    }
-
-    fn generate_noise(&mut self) {
-        use rayon::prelude::*;
-        use std::sync::{Arc, Mutex};
-        let min_max_lock = Arc::new(Mutex::new([i32::MAX, i32::MIN]));
-
-        let params = &self.builder;
-        self.texture3d
-            .data
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(index, val)| {
-                let id = UVec3::new(
-                    (index % params.resolution) as u32,
-                    ((index / params.resolution) % params.resolution) as u32,
-                    (index / (params.resolution * params.resolution)) as u32,
-                );
-                let pos = id.as_vec3() / params.resolution as f32;
-
-                let noise_sum =
-                    Worley::worley(&self.points_a, params.num_points_a, pos, params.tile)
-                        + Worley::worley(&self.points_b, params.num_points_b, pos, params.tile)
-                            * params.persistence
-                        + Worley::worley(&self.points_c, params.num_points_c, pos, params.tile)
-                            * params.persistence
-                            * params.persistence;
-
-                let max_val =
-                    1.0 + (params.persistence) + (params.persistence * params.persistence);
-
-                let noise_sum = noise_sum / max_val;
-                let noise_sum = if params.invert_noise {
-                    1.0 - noise_sum
-                } else {
-                    noise_sum
-                };
-                let scaled_val = (noise_sum * 10_000_000.0) as i32;
-                let mut min_max_lock = min_max_lock.lock().unwrap();
-                min_max_lock[0] = min_max_lock[0].min(scaled_val);
-                min_max_lock[1] = min_max_lock[1].max(scaled_val);
-                drop(min_max_lock);
-
-                *val = *val * (1.0 - params.color_mask) + noise_sum * params.color_mask;
-                assert!(val.x >= 0., "{:?} {:?}", val, noise_sum);
-            });
-
-        let min_max = Arc::try_unwrap(min_max_lock)
-            .expect("one strong reference")
-            .into_inner()
-            .expect("No one holding the mutex");
-        self.texture3d.data.par_iter_mut().for_each(|val| {
-            let min_val = min_max[0] as f32 / 10_000_000.0;
-            let max_val = min_max[1] as f32 / 10_000_000.0;
-            let normalized_val = (*val - min_val) / (max_val - min_val);
-            // println!("{:?}", normalized_val);
-            *val = *val * (1.0 - params.color_mask) + normalized_val * params.color_mask;
-            // *val = Vec4::from(*val).clamp(Vec4::ZERO, Vec4::ONE);
-            // assert!(val.x >= 0., "{:?} {:?}", val, min_max);
-        });
-    }
-
-    pub fn sample_level(&self, vec3: Vec3) -> Vec4 {
-        self.texture3d.sample_level(vec3, 0)
-    }
-
     fn create_worley_points_buffer(rng: &mut impl Rng, num_cells: usize) -> Vec<Vec3> {
         let mut points = vec![Vec3::ZERO; num_cells * num_cells * num_cells];
         let cell_size = 1.0 / num_cells as f32;
@@ -305,8 +213,7 @@ impl Worley {
 // pub type Perlin = Worley;
 // pub type PerlinBuilder = WorleyBuilder;
 
-
-#[derive(Default, Clone, Copy, Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Copy, Clone)]
 pub struct PerlinBuilder {
     pub seed: u64,
     pub num_points_a: usize,
@@ -320,10 +227,6 @@ pub struct PerlinBuilder {
 }
 
 impl PerlinBuilder {
-    pub fn build(self) -> Perlin {
-        Perlin::build(self)
-    }
-
     pub fn new() -> Self {
         Self::default()
     }
@@ -376,7 +279,7 @@ impl PerlinBuilder {
 
 #[derive(Default, Debug, PartialEq, Clone)]
 pub struct Perlin {
-    texture3d: RWTexture3D<Vec4>,
+    texture3d: Texture3D<Vec4>,
     pub builder: PerlinBuilder,
 }
 
@@ -394,64 +297,7 @@ impl DerefMut for Perlin {
 }
 
 impl Perlin {
-    pub fn build(perlin_noise_builder: PerlinBuilder) -> Self {
-        let resolution = perlin_noise_builder.resolution;
-        // let mut rng = StdRng::seed_from_u64(perlin_noise_builder.seed);
-        let mut w = Self {
-            texture3d: RWTexture3D {
-                data: {
-                    let len = resolution * resolution * resolution;
-                    vec![Vec4::ZERO; len]
-                },
-                x: resolution,
-                y: resolution,
-                z: resolution,
-            },
-            builder: perlin_noise_builder,
-        };
-
-        w.generate_noise();
-        w
-    }
-
-    fn generate_noise(&mut self) {
-        use rayon::prelude::*;
-
-        let params = &self.builder;
-        self.texture3d
-            .data
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(index, val)| {
-                let id = UVec3::new(
-                    (index % params.resolution) as u32,
-                    ((index / params.resolution) % params.resolution) as u32,
-                    (index / (params.resolution * params.resolution)) as u32,
-                );
-                let pos = id.as_vec3() / params.resolution as f32;
-                let noise_sum = Perlin::perlin(params.num_points_a, pos, params.tile)
-                    + Perlin::perlin(params.num_points_b, pos, params.tile) * params.persistence
-                    + Perlin::perlin(params.num_points_c, pos, params.tile)
-                        * params.persistence
-                        * params.persistence;
-
-                let max_val =
-                    1.0 + (params.persistence) + (params.persistence * params.persistence);
-
-                let noise_sum = noise_sum / max_val;
-                let noise_sum = if params.invert_noise {
-                    1.0 - noise_sum
-                } else {
-                    noise_sum
-                };
-                *val = *val * (1.0 - params.color_mask) + noise_sum * params.color_mask;
-            });
-    }
-
-    pub fn sample_level(&self, vec3: Vec3) -> Vec4 {
-        self.texture3d.sample_level(vec3, 0)
-    }
-
+    #[allow(clippy::excessive_precision)]
     fn perlin(num_cells: usize, sample_pos: Vec3, tile: f32) -> f32 {
         #[inline]
         fn mod289_vec3(x: Vec3) -> Vec3 {
@@ -520,5 +366,241 @@ impl Perlin {
             sample_pos.z * tile * num_cells as f32,
             sample_pos.x * tile * num_cells as f32,
         ))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum Noise {
+    Worley(Worley),
+    Perlin(Perlin),
+}
+
+impl Default for Noise {
+    fn default() -> Self {
+        Self::Worley(Worley::default())
+    }
+}
+
+impl INoise for Noise {
+    type NoiseBuilder = NoiseBuilder;
+    fn sample_level(&self, vec3: Vec3) -> Vec4 {
+        match self {
+            Noise::Worley(x) => x.sample_level(vec3),
+            Noise::Perlin(x) => x.sample_level(vec3),
+        }
+    }
+    fn generate_noise(&mut self) {
+        match self {
+            Noise::Worley(x) => x.generate_noise(),
+            Noise::Perlin(x) => x.generate_noise(),
+        }
+    }
+
+    fn build(noise_builder: Self::NoiseBuilder) -> Self {
+        noise_builder.build()
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum NoiseBuilder {
+    WorleyBuilder(WorleyBuilder),
+    PerlinBuilder(PerlinBuilder),
+}
+
+impl INoiseBuilder for NoiseBuilder {
+    type Noise = Noise;
+    fn build(self) -> Noise {
+        match self {
+            NoiseBuilder::WorleyBuilder(x) => Noise::Worley(x.build()),
+            NoiseBuilder::PerlinBuilder(x) => Noise::Perlin(x.build()),
+        }
+    }
+}
+
+impl From<WorleyBuilder> for NoiseBuilder {
+    fn from(value: WorleyBuilder) -> Self {
+        Self::WorleyBuilder(value)
+    }
+}
+
+impl From<PerlinBuilder> for NoiseBuilder {
+    fn from(value: PerlinBuilder) -> Self {
+        Self::PerlinBuilder(value)
+    }
+}
+
+impl Default for NoiseBuilder {
+    fn default() -> Self {
+        Self::WorleyBuilder(WorleyBuilder::default())
+    }
+}
+
+pub trait INoise: Sized {
+    type NoiseBuilder;
+    fn sample_level(&self, vec3: Vec3) -> Vec4;
+    fn generate_noise(&mut self);
+
+    fn build(noise_builder: Self::NoiseBuilder) -> Self;
+}
+
+pub trait INoiseBuilder {
+    type Noise;
+    fn build(self) -> Self::Noise;
+}
+impl INoiseBuilder for PerlinBuilder {
+    type Noise = Perlin;
+    fn build(self) -> Perlin {
+        Perlin::build(self)
+    }
+}
+impl INoiseBuilder for WorleyBuilder {
+    type Noise = Worley;
+    fn build(self) -> Worley {
+        Worley::build(self)
+    }
+}
+
+impl INoise for Perlin {
+    type NoiseBuilder = PerlinBuilder;
+    fn sample_level(&self, vec3: Vec3) -> Vec4 {
+        self.texture3d.sample_level(vec3, 0)
+    }
+    fn generate_noise(&mut self) {
+        use rayon::prelude::*;
+
+        let params = &self.builder;
+        self.texture3d
+            .data
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(index, val)| {
+                let id = UVec3::new(
+                    (index % params.resolution) as u32,
+                    ((index / params.resolution) % params.resolution) as u32,
+                    (index / (params.resolution * params.resolution)) as u32,
+                );
+                let pos = id.as_vec3() / params.resolution as f32;
+                let noise_sum = Perlin::perlin(params.num_points_a, pos, params.tile)
+                    + Perlin::perlin(params.num_points_b, pos, params.tile) * params.persistence
+                    + Perlin::perlin(params.num_points_c, pos, params.tile)
+                        * params.persistence
+                        * params.persistence;
+
+                let max_val =
+                    1.0 + (params.persistence) + (params.persistence * params.persistence);
+
+                let noise_sum = noise_sum / max_val;
+                let noise_sum = if params.invert_noise {
+                    1.0 - noise_sum
+                } else {
+                    noise_sum
+                };
+                *val = *val * (1.0 - params.color_mask) + noise_sum * params.color_mask;
+            });
+    }
+    fn build(noise_builder: Self::NoiseBuilder) -> Self {
+        let resolution = noise_builder.resolution;
+        // let mut rng = StdRng::seed_from_u64(perlin_noise_builder.seed);
+        let mut w = Self {
+            texture3d: Texture3D {
+                data: {
+                    let len = resolution * resolution * resolution;
+                    vec![Vec4::ZERO; len]
+                },
+                x: resolution,
+                y: resolution,
+                z: resolution,
+            },
+            builder: noise_builder,
+        };
+
+        w.generate_noise();
+        w
+    }
+}
+
+impl INoise for Worley {
+    type NoiseBuilder = WorleyBuilder;
+    fn sample_level(&self, vec3: Vec3) -> Vec4 {
+        self.texture3d.sample_level(vec3, 0)
+    }
+    fn generate_noise(&mut self) {
+        use rayon::prelude::*;
+        use std::sync::{Arc, Mutex};
+        let min_max_lock = Arc::new(Mutex::new([i32::MAX, i32::MIN]));
+
+        let params = &self.builder;
+        self.texture3d
+            .data
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(index, val)| {
+                let id = UVec3::new(
+                    (index % params.resolution) as u32,
+                    ((index / params.resolution) % params.resolution) as u32,
+                    (index / (params.resolution * params.resolution)) as u32,
+                );
+                let pos = id.as_vec3() / params.resolution as f32;
+
+                let noise_sum =
+                    Worley::worley(&self.points_a, params.num_points_a, pos, params.tile)
+                        + Worley::worley(&self.points_b, params.num_points_b, pos, params.tile)
+                            * params.persistence
+                        + Worley::worley(&self.points_c, params.num_points_c, pos, params.tile)
+                            * params.persistence
+                            * params.persistence;
+
+                let max_val =
+                    1.0 + (params.persistence) + (params.persistence * params.persistence);
+
+                let noise_sum = noise_sum / max_val;
+                let noise_sum = if params.invert_noise {
+                    1.0 - noise_sum
+                } else {
+                    noise_sum
+                };
+                let scaled_val = (noise_sum * 10_000_000.0) as i32;
+                let mut min_max_lock = min_max_lock.lock().unwrap();
+                min_max_lock[0] = min_max_lock[0].min(scaled_val);
+                min_max_lock[1] = min_max_lock[1].max(scaled_val);
+                drop(min_max_lock);
+
+                *val = *val * (1.0 - params.color_mask) + noise_sum * params.color_mask;
+                assert!(val.x >= 0., "{:?} {:?}", val, noise_sum);
+            });
+
+        let min_max = std::sync::Arc::into_inner(min_max_lock)
+            .expect("one strong reference")
+            .into_inner()
+            .expect("No one holding the mutex");
+        self.texture3d.data.par_iter_mut().for_each(|val| {
+            let min_val = min_max[0] as f32 / 10_000_000.0;
+            let max_val = min_max[1] as f32 / 10_000_000.0;
+            let normalized_val = (*val - min_val) / (max_val - min_val);
+            *val = *val * (1.0 - params.color_mask) + normalized_val * params.color_mask;
+        });
+    }
+
+    fn build(worley_builder: Self::NoiseBuilder) -> Self {
+        let resolution = worley_builder.resolution;
+        let mut rng = StdRng::seed_from_u64(worley_builder.seed);
+        let mut w = Self {
+            points_a: Self::create_worley_points_buffer(&mut rng, worley_builder.num_points_a),
+            points_b: Self::create_worley_points_buffer(&mut rng, worley_builder.num_points_b),
+            points_c: Self::create_worley_points_buffer(&mut rng, worley_builder.num_points_c),
+            texture3d: Texture3D {
+                data: {
+                    let len = resolution * resolution * resolution;
+                    vec![Vec4::ZERO; len]
+                },
+                x: resolution,
+                y: resolution,
+                z: resolution,
+            },
+            builder: worley_builder,
+        };
+
+        w.generate_noise();
+        w
     }
 }

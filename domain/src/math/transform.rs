@@ -1,5 +1,3 @@
-// glam's types are part of our interface
-// TODO: use mint? But then we'd have to convert every time ...
 pub use glam;
 use glam::{Mat4, Vec3Swizzles, Vec4Swizzles};
 
@@ -53,33 +51,5 @@ impl Transform {
     /// Returns a Transform which has the given transformation prepended
     pub fn prepend(&mut self, tf: Transform) {
         self.mat = tf.mat * self.mat;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::math::Transform;
-    use crate::object::camera::Camera;
-    use egui::Rect;
-
-    #[test]
-    fn test_world_to_egui() {
-        let mut camera = Camera::default();
-        camera.pivot(1.0, 1.0);
-        camera.zoom(3.0);
-        camera.pan(1.0, 1.0);
-
-        let world_position = glam::Vec3::new(6.007933, -0.25131124, 0.9);
-        let width = 1920;
-        let height = 1080;
-
-        let r = (1920.0, 1080.0).into();
-        let mx = camera.projection(width as f32, height as f32) * camera.view();
-        let t = Transform::new(mx, Rect::from_min_size((0.0, 0.0).into(), r));
-
-        println!("{:?}", world_position);
-        let res = t.world_to_egui(world_position);
-        println!("{:?}", res);
-        println!("{:?}", t.egui_to_world(res.0, 0.976));
     }
 }

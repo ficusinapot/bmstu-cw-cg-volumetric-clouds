@@ -7,7 +7,7 @@ use crate::scene::scene::Scene;
 use crate::visitor::draw_visitor::DrawVisitor;
 use crate::visitor::Visitable;
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct DrawManager {
     canvas: Option<Painter3D>,
     stroke: Stroke,
